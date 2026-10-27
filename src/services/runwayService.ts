@@ -12,6 +12,7 @@ import { getH3MaxConfigError, getH3MaxMode, getH3MaxReferenceImages, getH3MaxReq
 import { normalizeH3MaxPromptLanguage } from '../lib/video/h3MaxPromptGuide';
 import { estimateH3MaxCost } from '../lib/video/h3MaxPricing';
 import { hydrateH3MaxReferenceDimensions } from '../lib/video/h3MaxReferenceMetadata';
+import { getGeminiOmniConfigError } from '../lib/video/geminiOmni';
 export { hydrateH3MaxReferenceDimensions } from '../lib/video/h3MaxReferenceMetadata';
 
 const POLL_INTERVAL = 5000;
@@ -729,6 +730,9 @@ const cleanPromptForVideoModel = (
   videoOperation: VideoOperation,
 ): string => {
   let cleaned = prompt;
+  if (videoModel === 'gemini-omni-1.1-flash') {
+    return normalizeVideoPromptWhitespace(cleaned);
+  }
   if (videoModel === 'minimax-h3') {
     const frameLabel = (rawIndex: string): string => {
       const index = Number(rawIndex);
@@ -856,6 +860,47 @@ const createH3MaxVideoTask = async (config: GenerationConfig, initiatingUserId?:
     cost:estimateH3MaxCost(resolved),mode,referenceImages:resolved.referenceImages,referenceVideos:resolved.referenceVideos,referenceAudios};
 };
 
+const createGeminiOmniVideoTask = async (
+  config: GenerationConfig,
+  initiatingUserId?: string,
+  context?: { id: string },
+) => {
+  const { prompt, referenceImages = [], referenceVideos = [], videoAspectRatio = '16:9', videoQuality = '720p', videoDuration = 5 } = config;
+  const error = getGeminiOmniConfigError(prompt, referenceImages, referenceVideos, videoAspectRatio, videoQuality, videoDuration);
+  if (error) throw new Error(error);
+
+  const cost = estimateVideoCost('gemini-omni-1.1-flash', videoQuality, videoDuration, false);
+  const headers = await getServerAuthHeaders(initiatingUserId);
+  const body = {
+    prompt,
+    duration: videoDuration,
+    quality: videoQuality,
+    aspectRatio: videoAspectRatio,
+    referenceImages: referenceImages.map(img => ({ data: img.data, mimeType: img.mimeType })),
+    ...(context?.id ? { generationId: context.id } : {}),
+  };
+
+  const response = await fetch('/api/gemini-video', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result?.taskId) {
+    throw new Error(result?.error || 'Failed to start Gemini Omni generation.');
+  }
+
+  return {
+    taskId: result.taskId,
+    cost,
+    mode: (referenceImages.length > 0 ? 'image_to_video' : 'text_only') as EvoMode,
+    referenceImages,
+    referenceVideos: [],
+    referenceAudios: [],
+  };
+};
+
 export const createVideoTask = async (
   config: GenerationConfig, context?:{id:string}
 ): Promise<{ taskId: string; endpoint?: string; queueEndpoint?: string; cost: VideoCost | undefined; mode: EvoMode; referenceImages?: ReferenceImage[]; referenceVideos: ReferenceVideo[]; referenceAudios: ReferenceAudio[] }> => {
@@ -865,6 +910,7 @@ export const createVideoTask = async (
   const videoModel = config.videoModel || DEFAULT_VIDEO_MODEL;
   const videoOperation = config.videoOperation || 'generate';
   if(videoModel==='minimax-h3')return createH3MaxVideoTask(config,initiatingUserId,context);
+  if(videoModel==='gemini-omni-1.1-flash')return createGeminiOmniVideoTask(config,initiatingUserId,context);
 
   const selectedProvider = await selectProvider(videoModel);
   const refVids = referenceVideos || [];
@@ -1080,13 +1126,14 @@ export const pollVideoTask = async (
   const { data: { session: startingSession } } = await supabase.auth.getSession();
   const initiatingUserId = startingSession?.user?.id;
   const isH3 = videoModel === 'minimax-h3';
+  const isGemini = videoModel === 'gemini-omni-1.1-flash';
   const effectiveQueueEndpoint = queueEndpoint || endpoint;
   const isH3Max = isH3 && (
     endpoint?.startsWith('minimax/h3-max/') === true
     || effectiveQueueEndpoint === 'minimax/h3-max'
   );
   const routed = taskId.startsWith('bs_fal_') || taskId.startsWith('bs_openrouter_');
-  const providerName = isH3 || taskId.startsWith('bs_fal_') ? 'fal.ai' : taskId.startsWith('bs_openrouter_') ? 'OpenRouter' : 'EvoLink';
+  const providerName = isGemini ? 'Google Gemini' : isH3 || taskId.startsWith('bs_fal_') ? 'fal.ai' : taskId.startsWith('bs_openrouter_') ? 'OpenRouter' : 'EvoLink';
   let consecutiveErrors = 0;
   const MAX_ERRORS = 5;
   let retryableStatusErrors = 0;
@@ -1097,9 +1144,11 @@ export const pollVideoTask = async (
     if (pollingSession?.user?.id !== initiatingUserId) throw new Error('Session changed while checking the video.');
     try {
       const res = await fetch(
-        routed ? `/api/seedance-video?taskId=${encodeURIComponent(taskId)}` : isH3
-          ? `/api/fal-h3-video?requestId=${encodeURIComponent(taskId)}${effectiveQueueEndpoint ? `&endpoint=${encodeURIComponent(effectiveQueueEndpoint)}` : ''}`
-          : `/api/evolink-status?taskId=${encodeURIComponent(taskId)}`,
+        isGemini
+          ? `/api/gemini-video-status?taskId=${encodeURIComponent(taskId)}`
+          : routed ? `/api/seedance-video?taskId=${encodeURIComponent(taskId)}` : isH3
+            ? `/api/fal-h3-video?requestId=${encodeURIComponent(taskId)}${effectiveQueueEndpoint ? `&endpoint=${encodeURIComponent(effectiveQueueEndpoint)}` : ''}`
+            : `/api/evolink-status?taskId=${encodeURIComponent(taskId)}`,
         { headers: await getServerAuthHeaders(initiatingUserId), cache: 'no-store' },
       );
 
@@ -1122,7 +1171,7 @@ export const pollVideoTask = async (
       consecutiveErrors = 0;
       retryableStatusErrors = 0;
 
-      if (data.status === 'SUCCEEDED') {
+      if (data.status === 'SUCCEEDED' || data.status === 'completed') {
         const output = Array.isArray(data.output) ? data.output : [];
         if (output.length === 0) {
           throw new TerminalVideoTaskError('Video generation completed without an output URL');
@@ -1139,7 +1188,7 @@ export const pollVideoTask = async (
           duration:typeof data.duration==='number'&&Number.isFinite(data.duration)&&data.duration>0?data.duration:undefined,
         };
       }
-      if (data.status === 'FAILED') throw new TerminalVideoTaskError(data.error || 'Video generation failed');
+      if (data.status === 'FAILED' || data.status === 'failed') throw new TerminalVideoTaskError(data.error || 'Video generation failed');
       if (data.status === 'CANCELLED') throw new TerminalVideoTaskError(data.error || 'Video generation was cancelled');
       onProgress?.(data.progress ?? 0);
     } catch (err: any) {

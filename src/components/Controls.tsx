@@ -1823,14 +1823,19 @@ export const Controls: React.FC<ControlsProps> = ({
         : [{ label: 'Source', value: 'adaptive' }];
   const videoQualityOptions = selectedVideoModel === 'minimax-h3'
     ? h3State.capabilities.resolutions.map(value => ({ label: value, value: value.toLowerCase() === '2k' ? '2K' : value.toLowerCase() }))
-    : VIDEO_QUALITY_OPTIONS.filter(o => o.value === '480p' || o.value === '720p' || o.value === '1080p' && !(providerRoute.provider === 'openrouter' && selectedVideoModel === 'seedance-2.5')).map(o => ({ label: o.label, value: o.value }));
+    : selectedVideoModel === 'gemini-omni-1.1-flash'
+      ? [{ label: '720p', value: '720p' }, { label: '1080p', value: '1080p' }]
+      : VIDEO_QUALITY_OPTIONS.filter(o => o.value === '480p' || o.value === '720p' || o.value === '1080p' && !(providerRoute.provider === 'openrouter' && selectedVideoModel === 'seedance-2.5')).map(o => ({ label: o.label, value: o.value }));
   const videoDurationOptions = selectedVideoOperation === 'edit'
     ? [{ label: 'Auto (source)', value: '-1' }]
     : [
         ...(selectedVideoModel === 'seedance-2.5' && providerRoute.provider !== 'openrouter' ? [{ label: 'Auto', value: '-1' }] : []),
         ...VIDEO_DURATION_OPTIONS
-          .filter(o => (selectedVideoModel === 'seedance-2.5' || o.value <= 15)
-            && (selectedVideoModel !== 'minimax-h3' || o.value >= 5))
+          .filter(o => {
+            if (selectedVideoModel === 'gemini-omni-1.1-flash') return o.value === 5 || o.value === 10;
+            return (selectedVideoModel === 'seedance-2.5' || o.value <= 15)
+              && (selectedVideoModel !== 'minimax-h3' || o.value >= 5);
+          })
           .map(o => ({ label: o.label, value: String(o.value) })),
       ];
   const isVideoMode = config.mode === 'video';
