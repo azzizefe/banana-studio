@@ -23,6 +23,8 @@ import evolinkStatus from '../../api/evolink-status.ts';
 import youtube from '../../api/youtube.ts';
 import youtubeStatus from '../../api/youtube-status.ts';
 import seedanceVideo from '../../api/seedance-video.ts';
+import geminiVideo from '../../api/gemini-video.ts';
+import geminiVideoStatus from '../../api/gemini-video-status.ts';
 import { chooseProvider } from '../../api/_lib/providerConfiguration.ts';
 import { seedanceProviderError } from '../../src/lib/video/seedanceProviders.ts';
 
@@ -48,7 +50,7 @@ const wake=()=>{
   }
 };
 setQueueWake(wake);
-const routes={'openai-text-generate':openaiText,'openrouter-text-generate':openrouterText,'gemini-generate':geminiGenerate,'gemini-status':geminiStatus,'openai-image-generate':openaiImage,'openai-image-enqueue':openaiEnqueue,'openai-image-recover':openaiRecover,'fal-image-generate':falImage,'fal-status':falStatus,'fal-h3-video':falVideo,'fal-video-scale':falScale,'evolink-generate':evolinkGenerate,'evolink-status':evolinkStatus,'youtube':youtube,'youtube-status':youtubeStatus};
+const routes={'openai-text-generate':openaiText,'openrouter-text-generate':openrouterText,'gemini-generate':geminiGenerate,'gemini-status':geminiStatus,'gemini-video':geminiVideo,'gemini-video-status':geminiVideoStatus,'openai-image-generate':openaiImage,'openai-image-enqueue':openaiEnqueue,'openai-image-recover':openaiRecover,'fal-image-generate':falImage,'fal-status':falStatus,'fal-h3-video':falVideo,'fal-video-scale':falScale,'evolink-generate':evolinkGenerate,'evolink-status':evolinkStatus,'youtube':youtube,'youtube-status':youtubeStatus};
 const prepareMedia=createMediaUploader(workspace);
 routes['seedance-video']=async(req,res)=>{
  if(req.method==='POST'){

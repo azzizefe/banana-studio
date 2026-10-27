@@ -8,6 +8,7 @@ const MODELS: Record<string,string> = {
   'gpt-image-2.5-sunburst':'GPT Image 2.5', 'gemini-3-pro-image-preview':'Nano Banana Pro', 'gemini-nano-banana-2.1':'Nano Banana 2.1',
   'anthropic/claude-opus-5.5':'Claude Opus 5.5', 'gpt-6.1-sol':'GPT-6.1 Sol', 'gemini-3.8-flash':'Gemini 3.8 Flash · text / video analysis',
   'seedance-2.0':'Seedance 2.0', 'seedance-2.5':'Seedance 2.5', 'minimax-h3':'MiniMax H3 Max',
+  'gemini-omni-1.1-flash':'Gemini Omni 1.1 Flash',
 };
 export function useProviderRoute(model: string) {
   const [state,setState] = useState<{ model:string; provider?:AIProvider; choice:ProviderChoice; available:ProviderAvailability; error?:string }>({ model:'',choice:'auto',available:{} });

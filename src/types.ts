@@ -21,7 +21,7 @@ export type LocalImageSyncStatus = 'local-only' | 'synced';
 
 export type GenerationMode = 'image' | 'video';
 export type MediaType = 'image' | 'video';
-export type VideoModelId = 'seedance-2.0' | 'seedance-2.5' | 'minimax-h3';
+export type VideoModelId = 'seedance-2.0' | 'seedance-2.5' | 'minimax-h3' | 'gemini-omni-1.1-flash';
 export type VideoOperation = 'generate' | 'reference_edit' | 'edit' | 'extend';
 /** Continue can also create a new shot from a marked reference in Generate mode. */
 export type VideoPromptIntent = VideoOperation | 'continue';
@@ -68,6 +68,7 @@ export const VIDEO_MODEL_OPTIONS: { label: string; value: VideoModelId }[] = [
   { label: 'Seedance 2.0', value: 'seedance-2.0' },
   { label: 'Seedance 2.5 Relaxed', value: 'seedance-2.5' },
   { label: 'MiniMax H3 Max', value: 'minimax-h3' },
+  { label: 'Gemini Omni 1.1 Flash', value: 'gemini-omni-1.1-flash' },
 ];
 
 export const VIDEO_QUALITY_OPTIONS: { label: string; value: VideoQuality }[] = [
@@ -212,7 +213,7 @@ export type VideoPricingRate = {
 // EvoLink Standard-route pricing per billed second. Seedance video-input jobs
 // bill max(total input video duration, output duration) + output duration.
 // Sources: https://evolink.ai/seedance-2-0 and https://evolink.ai/seedance-2-5
-export const EVOLINK_PRICING: Record<Exclude<VideoModelId, 'minimax-h3'>, Partial<Record<VideoQuality, VideoPricingRate>>> = {
+export const EVOLINK_PRICING: Record<Extract<VideoModelId, 'seedance-2.0' | 'seedance-2.5'>, Partial<Record<VideoQuality, VideoPricingRate>>> = {
   'seedance-2.0': {
     '480p': { noVideoInput: 0.092, withVideoInput: 0.056, credits: { noVideoInput: 6.2775, withVideoInput: 3.834 } },
     '720p': { noVideoInput: 0.199, withVideoInput: 0.121, credits: { noVideoInput: 13.5, withVideoInput: 8.2215 } },
@@ -266,7 +267,7 @@ const SEEDANCE_25_RELAXED_CHANNEL_MULTIPLIER = 1.1;
 
 export const isSeedance25PromoActive = (): boolean => Date.now() <= SEEDANCE_25_1080_PROMO_END;
 
-export const getEvoLinkVideoPricing = (model: Exclude<VideoModelId, 'minimax-h3'>, quality: VideoQuality): VideoPricingRate => {
+export const getEvoLinkVideoPricing = (model: Extract<VideoModelId, 'seedance-2.0' | 'seedance-2.5'>, quality: VideoQuality): VideoPricingRate => {
   let pricing = EVOLINK_PRICING[model][quality] || EVOLINK_PRICING[model]['720p']!;
   if (model === 'seedance-2.5' && quality === '1080p' && !isSeedance25PromoActive()) {
     // After the promotion, EvoLink documents 1080p as 2.5x the 720p rate.
@@ -306,6 +307,15 @@ export const estimateVideoCost = (
   referenceImageCount: number = 0,
   h3Mode?: H3GenerationMode,
 ): VideoCost => {
+  if (model === 'gemini-omni-1.1-flash') {
+    const duration = Math.max(5, Math.min(10, outputDuration === -1 ? 5 : outputDuration));
+    const ratePerSec = quality === '1080p' ? 0.015 : 0.008;
+    return {
+      usd: ratePerSec * duration,
+      source: 'published_estimate',
+    };
+  }
+
   if (model === 'minimax-h3') {
     const duration = Math.max(5, Math.min(15, outputDuration === -1 ? 5 : outputDuration));
     if (h3Mode === 'text_only' || h3Mode === 'image_to_video') {

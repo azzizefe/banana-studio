@@ -18,6 +18,7 @@ export const MODEL_ROUTES: Record<string, readonly AIProvider[]> = {
   'seedance-2.0': ['evolink', 'fal', 'openrouter'],
   'seedance-2.5': ['evolink', 'fal', 'openrouter'],
   'minimax-h3': ['fal'],
+  'gemini-omni-1.1-flash': ['gemini', 'openrouter'],
 };
 export type ProviderAvailability = Partial<Record<AIProvider, boolean>>;
 export function resolveProvider(model: string, choice: unknown, available: ProviderAvailability): AIProvider {
@@ -40,4 +41,5 @@ export const OPENROUTER_MODELS: Record<string, string> = {
   'gpt-6.1-sol': 'openai/gpt-6.1-sol', 'gemini-3.8-flash': 'google/gemini-3.8-flash',
   'anthropic/claude-opus-5.5': 'anthropic/claude-opus-5.5',
   'seedance-2.0': 'bytedance/seedance-2.0', 'seedance-2.5': 'bytedance/seedance-2.5',
+  'gemini-omni-1.1-flash': 'google/gemini-omni-1.1-flash',
 };
