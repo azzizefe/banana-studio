@@ -31,7 +31,6 @@ import {
   Sliders,
   ArrowLeft,
   RotateCcw,
-  Zap,
 } from 'lucide-react';
 
 interface CinemaStudioProps {
@@ -275,13 +274,6 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = ({ onBackToBananaStudio
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <span className="flex items-center gap-1.5 bg-black/40 px-3 py-1.5 rounded-lg border border-white/5">
-            <Zap size={13} className="text-lime-400" />
-            <span>Kredi Bakiye: <strong className="text-white">2,480</strong></span>
-          </span>
         </div>
       </div>
 
