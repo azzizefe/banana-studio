@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clapperboard, Film, Video, Play, Plus, Sparkles, Layers, Sliders, ArrowLeft, Camera, MonitorPlay } from 'lucide-react';
+import { Clapperboard, Film, Video, Play, Plus, Sparkles, Layers, Sliders, ArrowLeft, Camera, MonitorPlay, Trash2 } from 'lucide-react';
 
 interface CinemaStudioProps {
   onBackToBananaStudio: () => void;
@@ -15,7 +15,7 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = ({ onBackToBananaStudio
   const activeScene = scenes.find(s => s.id === selectedSceneId) || scenes[0];
 
   const handleAddScene = () => {
-    const nextId = scenes.length + 1;
+    const nextId = scenes.length > 0 ? Math.max(...scenes.map(s => s.id)) + 1 : 1;
     const newScene = {
       id: nextId,
       title: `Scene ${nextId}: New Sequence`,
@@ -25,6 +25,28 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = ({ onBackToBananaStudio
     };
     setScenes([...scenes, newScene]);
     setSelectedSceneId(nextId);
+  };
+
+  const handleDeleteScene = (idToDelete: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (scenes.length <= 1) {
+      const resetScene = {
+        id: 1,
+        title: 'Scene 1: New Sequence',
+        prompt: 'Cinematic wide shot, 35mm lens, atmospheric lighting',
+        duration: '5s',
+        ratio: '2.39:1',
+      };
+      setScenes([resetScene]);
+      setSelectedSceneId(1);
+      return;
+    }
+
+    const filtered = scenes.filter(s => s.id !== idToDelete);
+    setScenes(filtered);
+    if (selectedSceneId === idToDelete) {
+      setSelectedSceneId(filtered[0]?.id || 1);
+    }
   };
 
   return (
@@ -91,15 +113,25 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = ({ onBackToBananaStudio
                 }`}
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-medium flex items-center gap-1.5">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold">
+                  <span className="text-xs font-medium flex items-center gap-1.5 truncate pr-2">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-bold">
                       {idx + 1}
                     </span>
-                    {scene.title}
+                    <span className="truncate">{scene.title}</span>
                   </span>
-                  <span className="text-[10px] text-gray-400 bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
-                    {scene.duration} · {scene.ratio}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-[10px] text-gray-400 bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
+                      {scene.duration} · {scene.ratio}
+                    </span>
+                    <button
+                      type="button"
+                      title="Sahneyi Sil"
+                      onClick={e => handleDeleteScene(scene.id, e)}
+                      className="p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
                 <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed">
                   {scene.prompt}
@@ -211,6 +243,15 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = ({ onBackToBananaStudio
                 Cinema Studio çoklu sahne kurgusu ve kamera hareketleri için hazırlandı.
               </p>
             </div>
+
+            <button
+              type="button"
+              onClick={() => handleDeleteScene(activeScene.id)}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-colors mt-1"
+            >
+              <Trash2 size={13} />
+              Bu Sahneyi Sil
+            </button>
           </div>
         </div>
       </div>
