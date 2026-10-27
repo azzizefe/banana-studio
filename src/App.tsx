@@ -1,5 +1,6 @@
 import { isLocalWorkspace } from './lib/config/runtimeConfig';
 import { WorkspaceBar } from './components/WorkspaceBar';
+import { CinemaStudio } from './components/CinemaStudio';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Controls } from './components/Controls';
 import { Gallery } from './components/Gallery';
@@ -126,6 +127,7 @@ const AuthorizedWorkspace: React.FC<{
   const setImageTaskInfo = withWorkspaceSession(workspaceStorage.setImageTaskInfo);
   const updateImageStatus = withWorkspaceSession(workspaceStorage.updateImageStatus);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [activeStudio, setActiveStudio] = useState<'banana' | 'cinema'>('banana');
   const [adminGalleryUser, setAdminGalleryUser] = useState<AdminUserSummary | null>(null);
   const [adminGalleryMedia, setAdminGalleryMedia] = useState<GeneratedMedia[]>([]);
   const [isAdminGalleryLoading, setIsAdminGalleryLoading] = useState(false);
@@ -1716,7 +1718,13 @@ const AuthorizedWorkspace: React.FC<{
   return (
     <div className="relative h-screen w-full bg-[#0d1117] text-white font-sans selection:bg-violet-500/30 flex flex-col overflow-hidden">
 
-      <WorkspaceBar profile={userProfile} onOpenAdmin={() => setIsAdminPanelOpen(true)} onSignOut={handleSignOut} />
+      <WorkspaceBar
+        profile={userProfile}
+        onOpenAdmin={() => setIsAdminPanelOpen(true)}
+        onSignOut={handleSignOut}
+        activeStudio={activeStudio}
+        onSelectStudio={setActiveStudio}
+      />
       {/* Admin Panel */}
       {!isLocalWorkspace() && userProfile?.role === 'admin' && <AdminPanel
         isOpen={isAdminPanelOpen}
@@ -1725,73 +1733,79 @@ const AuthorizedWorkspace: React.FC<{
         onBillingReconciled={refreshReconciledGalleryBilling}
       />}
 
-      <Gallery
-        key={adminGalleryUser?.user_id || 'own-gallery'}
-        images={displayedMedia}
-        currentFolderId={currentFolderId}
-        onFolderSelect={setCurrentFolderId}
-        selectedImageId={selectedImageId}
-        onImageSelect={setSelectedImageId}
-        onClear={handleClearHistory}
-        onToggleHistory={() => setIsHistoryOpen(!isHistoryOpen)}
-        onUseAsReference={handleUseAsReference}
-        onRecreate={handleRecreate}
-        onRecoverVideo={handleRecoverVideo}
-        onRecoverImage={handleRecoverImage}
-        onGenerateVariation={handleGenerateVariation}
-        onEditGenerate={async editConfig => {
-          if (adminGalleryUser) throw new Error('This gallery is read-only.');
-          validateImageGenerationReferences(editConfig);
-          return await handleGenerate(editConfig, true) as string[];
-        }}
-        onCancelBrainstorm={handleCancelBrainstorm}
-        onDelete={handleDelete}
-        onDeleteMultiple={handleDeleteMultiple}
-        onToggleFavorite={handleToggleFavorite}
-        onMove={handleMoveImages}
-        onMoveFolder={handleMoveFolder}
-        onDeleteFolder={handleDeleteFolder}
-        isHistoryOpen={isHistoryOpen}
-        toasts={toast.toasts}
-        onDismissToast={toast.dismissToast}
-        onDismissAllToasts={toast.dismissAll}
-        userProfile={userProfile}
-        onSignOut={handleSignOut}
-        onOpenAdmin={() => setIsAdminPanelOpen(true)}
-        galleryOwner={adminGalleryUser}
-        isReadOnly={!!adminGalleryUser}
-        isGalleryLoading={adminGalleryUser ? isAdminGalleryLoading : isInitialGalleryLoading}
-        isGalleryIndexLoading={adminGalleryUser ? isAdminGalleryLoading : isGalleryIndexLoading}
-        galleryLoadError={adminGalleryUser ? adminGalleryError : galleryHistoryError}
-        onExitAdminGallery={handleExitAdminGallery}
-      />
+      {activeStudio === 'cinema' ? (
+        <CinemaStudio onBackToBananaStudio={() => setActiveStudio('banana')} />
+      ) : (
+        <>
+          <Gallery
+            key={adminGalleryUser?.user_id || 'own-gallery'}
+            images={displayedMedia}
+            currentFolderId={currentFolderId}
+            onFolderSelect={setCurrentFolderId}
+            selectedImageId={selectedImageId}
+            onImageSelect={setSelectedImageId}
+            onClear={handleClearHistory}
+            onToggleHistory={() => setIsHistoryOpen(!isHistoryOpen)}
+            onUseAsReference={handleUseAsReference}
+            onRecreate={handleRecreate}
+            onRecoverVideo={handleRecoverVideo}
+            onRecoverImage={handleRecoverImage}
+            onGenerateVariation={handleGenerateVariation}
+            onEditGenerate={async editConfig => {
+              if (adminGalleryUser) throw new Error('This gallery is read-only.');
+              validateImageGenerationReferences(editConfig);
+              return await handleGenerate(editConfig, true) as string[];
+            }}
+            onCancelBrainstorm={handleCancelBrainstorm}
+            onDelete={handleDelete}
+            onDeleteMultiple={handleDeleteMultiple}
+            onToggleFavorite={handleToggleFavorite}
+            onMove={handleMoveImages}
+            onMoveFolder={handleMoveFolder}
+            onDeleteFolder={handleDeleteFolder}
+            isHistoryOpen={isHistoryOpen}
+            toasts={toast.toasts}
+            onDismissToast={toast.dismissToast}
+            onDismissAllToasts={toast.dismissAll}
+            userProfile={userProfile}
+            onSignOut={handleSignOut}
+            onOpenAdmin={() => setIsAdminPanelOpen(true)}
+            galleryOwner={adminGalleryUser}
+            isReadOnly={!!adminGalleryUser}
+            isGalleryLoading={adminGalleryUser ? isAdminGalleryLoading : isInitialGalleryLoading}
+            isGalleryIndexLoading={adminGalleryUser ? isAdminGalleryLoading : isGalleryIndexLoading}
+            galleryLoadError={adminGalleryUser ? adminGalleryError : galleryHistoryError}
+            onExitAdminGallery={handleExitAdminGallery}
+          />
 
-      {!adminGalleryUser && (
-        <Controls
-          config={config}
-          isDraftLoading={isRecreateLoading}
-          promptLoadVersion={promptLoadVersion}
-          imageCostHistory={[...generatedMedia, ...(imageCostHistory?.userId === userProfile?.id ? imageCostHistory?.samples || [] : [])]}
-          onChange={setConfig}
-          onGenerate={handleGenerate}
-          onBrainstormGenerate={handleBrainstormGenerate}
-          isBrainstormPreparing={isBrainstormPreparing}
-          activeRequests={activeRequests}
-          generationProgress={generationProgress}
-          templates={templates}
-          onSaveTemplate={handleSaveTemplate}
-          onUpdateTemplate={handleUpdateTemplate}
-          onDeleteTemplate={handleDeleteTemplate}
-          onSelectTemplate={handleSelectTemplate}
-        />
+          {!adminGalleryUser && (
+            <Controls
+              config={config}
+              isDraftLoading={isRecreateLoading}
+              promptLoadVersion={promptLoadVersion}
+              imageCostHistory={[...generatedMedia, ...(imageCostHistory?.userId === userProfile?.id ? imageCostHistory?.samples || [] : [])]}
+              onChange={setConfig}
+              onGenerate={handleGenerate}
+              onBrainstormGenerate={handleBrainstormGenerate}
+              isBrainstormPreparing={isBrainstormPreparing}
+              activeRequests={activeRequests}
+              generationProgress={generationProgress}
+              templates={templates}
+              onSaveTemplate={handleSaveTemplate}
+              onUpdateTemplate={handleUpdateTemplate}
+              onDeleteTemplate={handleDeleteTemplate}
+              onSelectTemplate={handleSelectTemplate}
+            />
+          )}
+
+          <HistoryPanel
+            images={generatedMedia.filter(img => !img.isLoading)}
+            isOpen={isHistoryOpen && !adminGalleryUser}
+            onClose={() => setIsHistoryOpen(false)}
+            onSelect={handleHistorySelect}
+          />
+        </>
       )}
-
-      <HistoryPanel
-        images={generatedMedia.filter(img => !img.isLoading)}
-        isOpen={isHistoryOpen && !adminGalleryUser}
-        onClose={() => setIsHistoryOpen(false)}
-        onSelect={handleHistorySelect}
-      />
     </div>
   );
 }

@@ -1,12 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { KeyRound, Settings, X } from 'lucide-react';
+import { Clapperboard, KeyRound, Settings, X } from 'lucide-react';
 import { TextModelSettings } from './TextModelSettings';
 import { ProviderRoutingSettings } from './ProviderRoutingSettings';
 import { isLocalWorkspace } from '../lib/config/runtimeConfig';
 import type { UserProfile } from '../types';
 import { postNativeAction } from '../../desktop/shared/nativeBridge';
 
-export function WorkspaceBar({ profile, onOpenAdmin, onSignOut }: { profile: UserProfile | null; onOpenAdmin: () => void; onSignOut: () => Promise<void> }) {
+export function WorkspaceBar({
+  profile,
+  onOpenAdmin,
+  onSignOut,
+  activeStudio = 'banana',
+  onSelectStudio,
+}: {
+  profile: UserProfile | null;
+  onOpenAdmin: () => void;
+  onSignOut: () => Promise<void>;
+  activeStudio?: 'banana' | 'cinema';
+  onSelectStudio?: (studio: 'banana' | 'cinema') => void;
+}) {
   const local = isLocalWorkspace();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -17,7 +29,34 @@ export function WorkspaceBar({ profile, onOpenAdmin, onSignOut }: { profile: Use
   }, [settingsOpen]);
   return <>
     <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-[#0d1117] px-5 py-2.5 text-xs">
-      <div><span className="font-semibold text-white">Banana Studio</span><span className="ml-3 text-gray-500">{local ? 'Local workspace · This computer' : profile?.display_name || 'Your workspace'}</span></div>
+      <div className="flex items-center gap-3">
+        <div className="flex items-center rounded-lg bg-white/[0.04] p-0.5 border border-white/[0.08]">
+          <button
+            type="button"
+            onClick={() => onSelectStudio?.('banana')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+              activeStudio === 'banana'
+                ? 'bg-white/10 text-white shadow-sm'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            Banana Studio
+          </button>
+          <button
+            type="button"
+            onClick={() => onSelectStudio?.('cinema')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium transition-all ${
+              activeStudio === 'cinema'
+                ? 'bg-violet-600 text-white shadow-sm shadow-violet-600/30'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Clapperboard size={13} className={activeStudio === 'cinema' ? 'text-white' : 'text-violet-400'} />
+            Cinema Studio
+          </button>
+        </div>
+        <span className="text-gray-500">{local ? 'Local workspace · This computer' : profile?.display_name || 'Your workspace'}</span>
+      </div>
       <div className="flex items-center gap-2">
         <button type="button" onClick={() => setSettingsOpen(true)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-gray-300 hover:bg-white/5"><Settings size={14} />AI settings</button>
         {!local && profile?.role === 'admin' && <button type="button" onClick={onOpenAdmin} className="rounded-lg px-3 py-2 text-violet-300 hover:bg-white/5">Workspace admin</button>}
