@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, GenerateVideosOperation } from '@google/genai';
 import { applyCors, requireUser } from './_lib/auth.js';
 import { requireProviderTask } from './_lib/providerTasks.js';
 
@@ -21,7 +21,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const operation = await ai.operations.getVideosOperation({ operation: taskId as any });
+    const reqOperation = new GenerateVideosOperation();
+    reqOperation.name = taskId;
+    const operation = await ai.operations.getVideosOperation({ operation: reqOperation });
 
     if (!operation.done) {
       return res.status(200).json({
