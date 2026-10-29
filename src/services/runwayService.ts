@@ -865,6 +865,9 @@ const createGeminiOmniVideoTask = async (
   initiatingUserId?: string,
   context?: { id: string },
 ) => {
+  if (!context?.id) {
+    throw new Error('A saved generation ID is required to start Gemini Omni generation.');
+  }
   const { prompt, referenceImages = [], referenceVideos = [], videoAspectRatio = '16:9', videoQuality = '720p', videoDuration = 5 } = config;
   const error = getGeminiOmniConfigError(prompt, referenceImages, referenceVideos, videoAspectRatio, videoQuality, videoDuration);
   if (error) throw new Error(error);

@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  if (body.generationId !== undefined && (typeof body.generationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(body.generationId))) {
+  if (!body.generationId || typeof body.generationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(body.generationId)) {
     return res.status(400).json({ error: 'A valid generation ID is required' });
   }
 
