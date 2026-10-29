@@ -5,7 +5,7 @@ import { prepareTaskRegistry, registerProviderTask, requireProviderTask } from '
 import { providerImageData } from './_lib/providerMedia.js';
 
 interface GeminiVideoRequest {
-  generationId?: string;
+  generationId: string;
   prompt?: string;
   imageUrls?: unknown;
   referenceImages?: { data: string; mimeType?: string }[];
@@ -92,27 +92,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Idempotency and gallery claim check
-  let galleryClaim: { id: string; metadata: Record<string, unknown> } | undefined;
-  if (body.generationId) {
-    const { data: saved, error: readError } = await writer.from('generations')
-      .select('id,user_id,type,status,task_id,metadata').eq('id', body.generationId).eq('user_id', user.id).maybeSingle();
-    if (readError) return res.status(503).json({ error: 'Saved generation access could not be verified. No provider request was sent.' });
-    if (!saved || saved.user_id !== user.id || saved.type !== 'video') return res.status(404).json({ error: 'Saved video generation not found' });
-    const metadata = saved.metadata && typeof saved.metadata === 'object' && !Array.isArray(saved.metadata) ? saved.metadata : {};
-    if (saved.task_id) {
-      if (!await requireProviderTask(req, res, 'gemini', saved.task_id)) return;
-      return res.status(200).json({ taskId: saved.task_id });
-    }
-    if (saved.status !== 'pending' || metadata.geminiSubmissionStartedAt) {
-      return res.status(409).json({ code: 'GENERATION_SUBMITTING', error: 'This saved video is already being submitted. Check the existing task instead of submitting again.' });
-    }
-    const claimedMetadata = { ...metadata, geminiSubmissionStartedAt: Date.now() };
-    const { data: claimed, error: claimError } = await writer.from('generations')
-      .update({ status: 'processing', metadata: claimedMetadata }).eq('id', body.generationId).eq('user_id', user.id).eq('status', 'pending').select('id').maybeSingle();
-    if (claimError) return res.status(503).json({ error: 'The saved video could not be claimed. No provider request was sent.' });
-    if (!claimed) return res.status(409).json({ code: 'GENERATION_SUBMITTING', error: 'This saved video is already being submitted. Check the existing task instead of submitting again.' });
-    galleryClaim = { id: body.generationId, metadata: claimedMetadata };
+  const generationId = body.generationId;
+  const { data: saved, error: readError } = await writer.from('generations')
+    .select('id,user_id,type,status,task_id,metadata').eq('id', generationId).eq('user_id', user.id).maybeSingle();
+  if (readError) return res.status(503).json({ error: 'Saved generation access could not be verified. No provider request was sent.' });
+  if (!saved || saved.user_id !== user.id || saved.type !== 'video') return res.status(404).json({ error: 'Saved video generation not found' });
+  const metadata = saved.metadata && typeof saved.metadata === 'object' && !Array.isArray(saved.metadata) ? saved.metadata : {};
+  if (saved.task_id) {
+    if (!await requireProviderTask(req, res, 'gemini', saved.task_id)) return;
+    return res.status(200).json({ taskId: saved.task_id });
   }
+  if (saved.status !== 'pending' || metadata.geminiSubmissionStartedAt) {
+    return res.status(409).json({ code: 'GENERATION_SUBMITTING', error: 'This saved video is already being submitted. Check the existing task instead of submitting again.' });
+  }
+  const claimedMetadata = { ...metadata, geminiSubmissionStartedAt: Date.now() };
+  const { data: claimed, error: claimError } = await writer.from('generations')
+    .update({ status: 'processing', metadata: claimedMetadata }).eq('id', generationId).eq('user_id', user.id).eq('status', 'pending').select('id').maybeSingle();
+  if (claimError) return res.status(503).json({ error: 'The saved video could not be claimed. No provider request was sent.' });
+  if (!claimed) return res.status(409).json({ code: 'GENERATION_SUBMITTING', error: 'This saved video is already being submitted. Check the existing task instead of submitting again.' });
+  const galleryClaim = { id: generationId, metadata: claimedMetadata };
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -155,26 +153,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       await registerProviderTask(writer, 'gemini', taskId, user.id);
     } catch (regError: any) {
-      if (galleryClaim) {
-        // Keep status 'processing' for admin reconciliation, but attach taskId and error to metadata
-        const { error: updateErr } = await writer.from('generations')
-          .update({ task_id: taskId, status: 'processing', metadata: { ...galleryClaim.metadata, error: regError.message } })
-          .eq('id', galleryClaim.id);
-        if (updateErr) console.error('Failed to update generation with taskId on regError:', { generationId: galleryClaim.id, taskId, error: updateErr.message });
-      }
+      // Keep status 'processing' for admin reconciliation, but attach taskId and error to metadata
+      const { error: updateErr } = await writer.from('generations')
+        .update({ task_id: taskId, status: 'processing', metadata: { ...galleryClaim.metadata, error: regError.message } })
+        .eq('id', galleryClaim.id);
+      if (updateErr) console.error('Failed to update generation with taskId on regError:', { generationId: galleryClaim.id, taskId, error: updateErr.message });
       return res.status(503).json({ error: regError.message, taskId });
     }
 
-    if (galleryClaim) {
-      const { error: updateErr } = await writer.from('generations').update({ task_id: taskId }).eq('id', galleryClaim.id);
-      if (updateErr) console.error('Failed to update generation taskId:', { generationId: galleryClaim.id, taskId, error: updateErr.message });
-    }
+    const { error: updateErr } = await writer.from('generations').update({ task_id: taskId }).eq('id', galleryClaim.id);
+    if (updateErr) console.error('Failed to update generation taskId:', { generationId: galleryClaim.id, taskId, error: updateErr.message });
 
     return res.status(200).json({ taskId });
   } catch (error: any) {
     const errorStatus = Number(error?.status || error?.statusCode || 500);
     const isDefinitiveRejection = errorStatus >= 400 && errorStatus < 500;
-    if (galleryClaim && isDefinitiveRejection) {
+    if (isDefinitiveRejection) {
       const { error: updateErr } = await writer.from('generations').update({
         status: 'failed',
         metadata: { ...galleryClaim.metadata, error: error?.message || 'Gemini video generation was rejected.' }
