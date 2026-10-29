@@ -161,6 +161,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       output: videoUrls,
     });
   } catch (error: any) {
+    const status = Number(error?.status || error?.statusCode);
+    const isTransient = status === 408 || status === 429 || (status >= 500 && status <= 599);
+    if (isTransient) {
+      return res.status(503).json({
+        error: error?.message || 'Gemini video operation check failed temporarily. Try again shortly.',
+        retryable: true,
+      });
+    }
     return res.status(500).json({ error: error?.message || 'Failed to poll Gemini video operation.' });
   }
 }
