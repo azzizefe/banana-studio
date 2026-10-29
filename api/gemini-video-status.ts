@@ -61,8 +61,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (item.video?.videoBytes) {
         buffer = Buffer.from(item.video.videoBytes, 'base64');
       } else if (item.video?.uri) {
+        // Validate protocol and host against SSRF: only HTTPS Google Gemini Files endpoint is allowed
+        const fetchUrl = new URL(item.video.uri);
+        if (fetchUrl.protocol !== 'https:' || fetchUrl.hostname !== 'generativelanguage.googleapis.com') {
+          throw new Error('Invalid or unauthorized video download URL from Gemini.');
+        }
+
         // Download via URI using header authentication only (do not expose key in URI)
-        const dlRes = await fetch(item.video.uri, {
+        const dlRes = await fetch(fetchUrl.toString(), {
           headers: { 'x-goog-api-key': apiKey },
           redirect: 'error',
           signal: AbortSignal.timeout(60_000),
