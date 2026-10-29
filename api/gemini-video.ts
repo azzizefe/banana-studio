@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI, type GenerateVideosParameters, type Image } from '@google/genai';
 import { applyCors, requireUser } from './_lib/auth.js';
 import { prepareTaskRegistry, registerProviderTask, requireProviderTask } from './_lib/providerTasks.js';
-import { isReferenceUrl } from './_lib/providerMedia.js';
+import { isReferenceUrl, providerImageData } from './_lib/providerMedia.js';
 
 interface GeminiVideoRequest {
   generationId?: string;
@@ -126,9 +126,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Prepare image if provided
     let imageParam: Image | undefined = undefined;
     if (referenceImages.length > 0 && referenceImages[0].data) {
-      const dataUri = referenceImages[0].data;
+      const dataUri = await providerImageData(writer, referenceImages[0].data);
       const base64Data = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
-      const mimeType = referenceImages[0].mimeType || 'image/jpeg';
+      const mimeType = referenceImages[0].mimeType || (dataUri.startsWith('data:') ? dataUri.slice(5, dataUri.indexOf(';')) : 'image/jpeg');
       imageParam = {
         imageBytes: base64Data,
         mimeType,

@@ -871,12 +871,16 @@ const createGeminiOmniVideoTask = async (
 
   const cost = estimateVideoCost('gemini-omni-1.1-flash', videoQuality, videoDuration, false);
   const headers = await getServerAuthHeaders(initiatingUserId);
+  const resolvedImages = await Promise.all(referenceImages.slice(0, 1).map(async img => {
+    const data = img.data.startsWith('http') ? (await resolveImageUrl(img)) || img.data : img.data;
+    return { data, mimeType: img.mimeType };
+  }));
   const body = {
     prompt,
     duration: videoDuration,
     quality: videoQuality,
     aspectRatio: videoAspectRatio,
-    referenceImages: referenceImages.map(img => ({ data: img.data, mimeType: img.mimeType })),
+    referenceImages: resolvedImages,
     ...(context?.id ? { generationId: context.id } : {}),
   };
 
