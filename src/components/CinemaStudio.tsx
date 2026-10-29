@@ -35,6 +35,7 @@ import {
   FolderPlus,
   FolderKanban,
   Tag,
+  ChevronLeft,
 } from 'lucide-react';
 
 interface CinemaStudioProps {
@@ -50,6 +51,11 @@ export interface SceneItem {
   resolution: string;
   cameraMovement: string;
   filmSetup: string;
+  filmGenre?: string;
+  filmEra?: string;
+  filmEraYear?: string;
+  filmTempo?: string;
+  filmLens?: string;
   colorPalette: string;
   lighting: string;
   hasAudio: boolean;
@@ -91,7 +97,11 @@ const DEFAULT_PROJECTS: CinemaProject[] = [
         ratio: '16:9',
         resolution: '1080p',
         cameraMovement: 'Dolly In (Push)',
-        filmSetup: '35mm Anamorphic',
+        filmSetup: 'Noir · 2090s+ (2099) · Calm',
+        filmGenre: 'Noir',
+        filmEra: '2090s+',
+        filmEraYear: '2099',
+        filmTempo: 'Calm',
         colorPalette: 'Cyberpunk Neon',
         lighting: 'Volumetric God Rays',
         hasAudio: true,
@@ -105,7 +115,11 @@ const DEFAULT_PROJECTS: CinemaProject[] = [
         ratio: '16:9',
         resolution: '1080p',
         cameraMovement: 'Auto Camera',
-        filmSetup: '50mm f/1.2 Prime',
+        filmSetup: 'Drama · 2020s (2026) · Single Shot',
+        filmGenre: 'Drama',
+        filmEra: '2020s',
+        filmEraYear: '2026',
+        filmTempo: 'Single Shot',
         colorPalette: 'Cyberpunk Neon',
         lighting: 'Dramatic Rim Light',
         hasAudio: true,
@@ -119,7 +133,11 @@ const DEFAULT_PROJECTS: CinemaProject[] = [
         ratio: '16:9',
         resolution: '1080p',
         cameraMovement: 'FPV Drone Dive',
-        filmSetup: 'IMAX 70mm',
+        filmSetup: 'Action · 2090s+ (2099) · Chaotic',
+        filmGenre: 'Action',
+        filmEra: '2090s+',
+        filmEraYear: '2099',
+        filmTempo: 'Chaotic',
         colorPalette: 'Teal & Orange',
         lighting: 'Neon Spill & Reflections',
         hasAudio: true,
@@ -142,7 +160,11 @@ const DEFAULT_PROJECTS: CinemaProject[] = [
         ratio: '2.39:1',
         resolution: '1080p',
         cameraMovement: 'Crane Down',
-        filmSetup: 'IMAX 70mm',
+        filmSetup: 'Epic · 1970s (1979) · Dynamic',
+        filmGenre: 'Epic',
+        filmEra: '1970s',
+        filmEraYear: '1979',
+        filmTempo: 'Dynamic',
         colorPalette: 'Moody Film Noir',
         lighting: 'Volumetric God Rays',
         hasAudio: true,
@@ -156,7 +178,11 @@ const DEFAULT_PROJECTS: CinemaProject[] = [
         ratio: '2.39:1',
         resolution: '1080p',
         cameraMovement: 'Dolly In (Push)',
-        filmSetup: '35mm Anamorphic',
+        filmSetup: 'Sci-Fi · 1960s (1968) · Single Shot',
+        filmGenre: 'Sci-Fi',
+        filmEra: '1960s',
+        filmEraYear: '1968',
+        filmTempo: 'Single Shot',
         colorPalette: 'Teal & Orange',
         lighting: 'Chiaroscuro Noir',
         hasAudio: true,
@@ -166,7 +192,328 @@ const DEFAULT_PROJECTS: CinemaProject[] = [
   },
 ];
 
-const FILM_SETUP_PRESETS = [
+export interface FilmGenreOption {
+  id: string;
+  name: string;
+  desc: string;
+  image: string;
+  gradient: string;
+  isAuto?: boolean;
+}
+
+export interface FilmEraOption {
+  id: string;
+  name: string;
+  yearRange: string;
+  desc: string;
+  sampleYears: string[];
+  image: string;
+  gradient: string;
+  isAuto?: boolean;
+}
+
+export interface FilmTempoOption {
+  id: string;
+  name: string;
+  desc: string;
+  segments: number[];
+  speedMs: number;
+  image: string;
+  gradient: string;
+  isAuto?: boolean;
+}
+
+const FILM_GENRE_OPTIONS: FilmGenreOption[] = [
+  {
+    id: 'auto',
+    name: 'Auto',
+    desc: 'Story conventions automatically inferred from your scene prompt',
+    image: '',
+    gradient: 'from-indigo-500/40 via-amber-400/35 to-sky-500/40',
+    isAuto: true,
+  },
+  {
+    id: 'drama',
+    name: 'Drama',
+    desc: 'Intimate character emotion, naturalistic depth, poignant storytelling',
+    image: 'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-amber-900/80 via-slate-800 to-slate-950',
+  },
+  {
+    id: 'noir',
+    name: 'Noir',
+    desc: 'High-contrast chiaroscuro shadows, rain-slicked streets & Venetian blinds',
+    image: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-zinc-900 via-neutral-950 to-black',
+  },
+  {
+    id: 'comedy',
+    name: 'Comedy',
+    desc: 'Warm vibrant lighting, expressive character framing & snappy visual timing',
+    image: 'https://images.unsplash.com/photo-1514306191717-452ec28c7814?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-amber-500/50 via-orange-600/40 to-rose-900/70',
+  },
+  {
+    id: 'horror',
+    name: 'Horror',
+    desc: 'Unsettling dread, deep eerie negative space & claustrophobic shadows',
+    image: 'https://images.unsplash.com/photo-1509114397022-ed747cca3f65?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-emerald-950 via-slate-950 to-black',
+  },
+  {
+    id: 'action',
+    name: 'Action',
+    desc: 'High-octane kinetic framing, visceral impact & explosive dynamics',
+    image: 'https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-orange-700/70 via-red-950 to-slate-950',
+  },
+  {
+    id: 'animation',
+    name: 'Animation',
+    desc: 'Stylized 3D/2D feature animation aesthetics, expressive lighting & color',
+    image: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-fuchsia-600/60 via-violet-800/70 to-indigo-950',
+  },
+  {
+    id: 'epic',
+    name: 'Epic',
+    desc: 'Monumental scale, sweeping vistas & grand theatrical composition',
+    image: 'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-slate-700 via-amber-900/60 to-stone-950',
+  },
+  {
+    id: 'scifi',
+    name: 'Sci-Fi',
+    desc: 'Futuristic cybernetic worlds, neon megastructures & cosmic scale',
+    image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-cyan-700/70 via-blue-950 to-violet-950',
+  },
+  {
+    id: 'thriller',
+    name: 'Thriller',
+    desc: 'Psychological tension, cold clinical tones & tight suspenseful framing',
+    image: 'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-teal-950 via-slate-900 to-black',
+  },
+  {
+    id: 'fantasy',
+    name: 'Fantasy',
+    desc: 'Mythical realms, ethereal magic illumination & otherworldly grandeur',
+    image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-purple-800/70 via-indigo-950 to-slate-950',
+  },
+  {
+    id: 'western',
+    name: 'Western',
+    desc: 'Sun-scorched frontier vistas, dusty standoffs & warm anamorphic grit',
+    image: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-amber-700/80 via-orange-950 to-stone-950',
+  },
+  {
+    id: 'romance',
+    name: 'Romance',
+    desc: 'Soft golden hour glow, dreamy bokeh & intimate emotional warmth',
+    image: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-rose-600/60 via-amber-800/60 to-slate-950',
+  },
+  {
+    id: 'documentary',
+    name: 'Documentary',
+    desc: 'Authentic observational realism, handheld immediacy & natural light',
+    image: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-emerald-800/60 via-stone-900 to-slate-950',
+  },
+];
+
+const FILM_ERA_OPTIONS: FilmEraOption[] = [
+  {
+    id: 'auto',
+    name: 'Auto',
+    yearRange: 'Automatic Period',
+    desc: 'AI automatically matches the historical or futuristic period of your prompt',
+    sampleYears: [],
+    image: '',
+    gradient: 'from-blue-500/50 via-orange-400/50 to-indigo-600/50',
+    isAuto: true,
+  },
+  {
+    id: '1920s',
+    name: '1920s',
+    yearRange: '1920 – 1929',
+    desc: 'Silent cinema, Art Deco grandeur, orthochromatic silver nitrate grain',
+    sampleYears: ['1920', '1922', '1925', '1927', '1929'],
+    image: 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-stone-600 via-neutral-800 to-black',
+  },
+  {
+    id: '1940s',
+    name: '1940s',
+    yearRange: '1940 – 1949',
+    desc: 'Classic Hollywood Golden Age, deep monochrome silver-screen contrast',
+    sampleYears: ['1941', '1943', '1945', '1947', '1949'],
+    image: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-zinc-700 via-zinc-900 to-black',
+  },
+  {
+    id: '1950s',
+    name: '1950s',
+    yearRange: '1950 – 1959',
+    desc: 'Three-strip Technicolor saturation, CinemaScope widescreen glamour',
+    sampleYears: ['1950', '1953', '1955', '1957', '1959'],
+    image: 'https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-red-700/70 via-amber-700/60 to-sky-950',
+  },
+  {
+    id: '1960s',
+    name: '1960s',
+    yearRange: '1960 – 1969',
+    desc: 'French New Wave, vintage 16mm/35mm Kodak stock & counterculture vibes',
+    sampleYears: ['1960', '1963', '1966', '1968', '1969'],
+    image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-amber-600/70 via-stone-800 to-slate-950',
+  },
+  {
+    id: '1970s',
+    name: '1970s',
+    yearRange: '1970 – 1979',
+    desc: 'New Hollywood gritty 35mm film grain, warm tungsten halation & zoom lenses',
+    sampleYears: ['1971', '1974', '1976', '1977', '1979'],
+    image: 'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-orange-800/80 via-amber-950 to-stone-950',
+  },
+  {
+    id: '1980s',
+    name: '1980s',
+    yearRange: '1980 – 1989',
+    desc: 'Anamorphic blue lens flares, neon synth atmosphere & practical effects',
+    sampleYears: ['1980', '1982', '1984', '1986', '1989'],
+    image: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-fuchsia-700/70 via-indigo-900 to-slate-950',
+  },
+  {
+    id: '1990s',
+    name: '1990s',
+    yearRange: '1990 – 1999',
+    desc: 'Classic 35mm photochemical blockbuster & independent cinema aesthetic',
+    sampleYears: ['1991', '1994', '1995', '1997', '1999'],
+    image: 'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-emerald-900/70 via-slate-900 to-black',
+  },
+  {
+    id: '2000s',
+    name: '2000s',
+    yearRange: '2000 – 2009',
+    desc: 'Super 35mm, early DI color grading, high-contrast teal/green & bleach bypass',
+    sampleYears: ['2000', '2003', '2005', '2007', '2009'],
+    image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-teal-800/70 via-slate-900 to-zinc-950',
+  },
+  {
+    id: '2010s',
+    name: '2010s',
+    yearRange: '2010 – 2019',
+    desc: 'ARRI Alexa digital cinema clarity, natural skin tones & wide dynamic range',
+    sampleYears: ['2010', '2013', '2015', '2017', '2019'],
+    image: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-sky-800/70 via-slate-900 to-black',
+  },
+  {
+    id: '2020s',
+    name: '2020s',
+    yearRange: '2020 – 2029',
+    desc: 'Ultra-crisp Large Format 65mm / IMAX digital optics & modern HDR grading',
+    sampleYears: ['2020', '2022', '2024', '2026', '2028'],
+    image: 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-indigo-800/70 via-slate-900 to-black',
+  },
+  {
+    id: '2090s',
+    name: '2090s+',
+    yearRange: '2050 – 2150 (Future)',
+    desc: 'Futuristic holographic optics, cybernetic atmosphere & post-modern worlds',
+    sampleYears: ['2049', '2077', '2099', '2120', '2150'],
+    image: 'https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-cyan-600/70 via-fuchsia-900/70 to-black',
+  },
+];
+
+const FILM_TEMPO_OPTIONS: FilmTempoOption[] = [
+  {
+    id: 'auto',
+    name: 'Auto',
+    desc: 'Montage rhythm adapts organically to the scene action',
+    segments: [26, 24, 26, 24],
+    speedMs: 900,
+    image: '',
+    gradient: 'from-pink-500/50 via-rose-500/40 to-amber-500/40',
+    isAuto: true,
+  },
+  {
+    id: 'chaotic',
+    name: 'Chaotic',
+    desc: 'Frenetic rapid-fire cuts, high-adrenaline kinetic montage',
+    segments: [11, 11, 11, 11, 11, 11, 11, 11, 11],
+    speedMs: 260,
+    image: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-rose-700/70 via-teal-900 to-slate-950',
+  },
+  {
+    id: 'dynamic',
+    name: 'Dynamic',
+    desc: 'Rhythmic action-driven cuts with fluid momentum & energy',
+    segments: [20, 20, 20, 20, 20],
+    speedMs: 520,
+    image: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-sky-700/70 via-emerald-900 to-slate-950',
+  },
+  {
+    id: 'calm',
+    name: 'Calm',
+    desc: 'Slow contemplative pacing, lingering serene shots & gentle rhythm',
+    segments: [50, 50],
+    speedMs: 1400,
+    image: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-teal-700/60 via-sky-950 to-slate-950',
+  },
+  {
+    id: 'single_shot',
+    name: 'Single Shot',
+    desc: 'Unbroken continuous one-take camera choreography (Oner)',
+    segments: [100],
+    speedMs: 2200,
+    image: 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-amber-700/70 via-stone-900 to-black',
+  },
+  {
+    id: 'fast_cut',
+    name: 'Fast Cut',
+    desc: 'Snappy whip-pans and high-tempo blockbuster action editing',
+    segments: [14, 14, 14, 14, 14, 14, 14],
+    speedMs: 350,
+    image: 'https://images.unsplash.com/photo-1508614589041-895b88991e3e?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-orange-600/70 via-red-950 to-black',
+  },
+  {
+    id: 'slow_burn',
+    name: 'Slow Burn',
+    desc: 'Deliberate, gradually escalating tension with measured cuts',
+    segments: [33, 33, 34],
+    speedMs: 1100,
+    image: 'https://images.unsplash.com/photo-1478760329108-5c3ed9d495a0?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-emerald-900/70 via-slate-950 to-black',
+  },
+  {
+    id: 'slow_motion',
+    name: 'Slow Motion',
+    desc: 'Ultra-high framerate 120fps dreamlike suspended motion',
+    segments: [72, 28],
+    speedMs: 1800,
+    image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=800&q=80',
+    gradient: 'from-violet-700/70 via-indigo-950 to-black',
+  },
+];
+
+export const FILM_LENS_PRESETS = [
   { id: 'auto', name: 'Auto', desc: 'AI selects optimal lens and film stock', badge: 'Default' },
   { id: '35mm_anamorphic', name: '35mm Anamorphic', desc: 'Cinematic oval bokeh & blue horizontal flares', badge: 'Cinema Standard' },
   { id: '50mm_prime', name: '50mm f/1.2 Prime', desc: 'Natural perspective with ultra-shallow depth of field', badge: 'Portraits' },
@@ -176,6 +523,25 @@ const FILM_SETUP_PRESETS = [
   { id: 'kodak_500t', name: 'Kodak Vision3 500T', desc: 'Rich tungsten warmth, authentic organic film grain', badge: 'Vintage' },
   { id: 'cinestill_800t', name: 'CineStill 800T', desc: 'Vibrant neon red halations around bright light sources', badge: 'Night' },
 ];
+
+const formatFilmSetupSummary = (
+  genre = 'Auto',
+  era = 'Auto',
+  eraYear = '',
+  tempo = 'Auto',
+  lens = 'Auto'
+): string => {
+  const parts: string[] = [];
+  if (genre && genre !== 'Auto') parts.push(genre);
+  if (eraYear && eraYear.trim()) {
+    parts.push(era && era !== 'Auto' ? `${era} (${eraYear.trim()})` : eraYear.trim());
+  } else if (era && era !== 'Auto') {
+    parts.push(era);
+  }
+  if (tempo && tempo !== 'Auto') parts.push(tempo);
+  if (lens && lens !== 'Auto') parts.push(lens);
+  return parts.length > 0 ? parts.join(' · ') : 'Auto';
+};
 
 const CAMERA_PRESETS = [
   { id: 'auto', name: 'Auto Camera', desc: 'Dynamic AI intelligent camera tracking' },
@@ -404,7 +770,9 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
   const [mode, setMode] = useState<'image' | 'video'>('video');
   const [selectedModel, setSelectedModel] = useState(MODELS[0]);
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
-  const [activePresetMenu, setActivePresetMenu] = useState<'film' | 'camera' | 'color' | 'lighting' | 'references' | null>(null);
+  const [activePresetMenu, setActivePresetMenu] = useState<'genre' | 'era' | 'tempo' | 'film' | 'camera' | 'color' | 'lighting' | 'references' | null>(null);
+  const [filmSetupTab, setFilmSetupTab] = useState<'genre' | 'era' | 'tempo' | 'lens'>('genre');
+  const [activeTempoSegment, setActiveTempoSegment] = useState<number>(0);
 
   const [selectedSceneId, setSelectedSceneId] = useState<number>(() => {
     return activeProject?.scenes[0]?.id || 1;
@@ -529,6 +897,74 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
         scenes: proj.scenes.map(s => s.id === activeScene.id ? { ...s, ...patch } : s),
       };
     }));
+  };
+
+  // Current Film Setup Sub-values (Genre, Era, EraYear, Tempo, Lens)
+  const currentGenre = activeScene.filmGenre || 'Auto';
+  const currentEra = activeScene.filmEra || 'Auto';
+  const currentEraYear = activeScene.filmEraYear || '';
+  const currentTempo = activeScene.filmTempo || 'Auto';
+  const currentLens = activeScene.filmLens || 'Auto';
+
+  const activeGenreIndex = Math.max(0, FILM_GENRE_OPTIONS.findIndex(g => g.name === currentGenre));
+  const activeEraIndex = Math.max(0, FILM_ERA_OPTIONS.findIndex(e => e.name === currentEra));
+  const activeTempoIndex = Math.max(0, FILM_TEMPO_OPTIONS.findIndex(t => t.name === currentTempo));
+
+  const activeGenreObj = FILM_GENRE_OPTIONS[activeGenreIndex] || FILM_GENRE_OPTIONS[0];
+  const prevGenreObj = FILM_GENRE_OPTIONS[(activeGenreIndex - 1 + FILM_GENRE_OPTIONS.length) % FILM_GENRE_OPTIONS.length];
+  const nextGenreObj = FILM_GENRE_OPTIONS[(activeGenreIndex + 1) % FILM_GENRE_OPTIONS.length];
+
+  const activeEraObj = FILM_ERA_OPTIONS[activeEraIndex] || FILM_ERA_OPTIONS[0];
+  const prevEraObj = FILM_ERA_OPTIONS[(activeEraIndex - 1 + FILM_ERA_OPTIONS.length) % FILM_ERA_OPTIONS.length];
+  const nextEraObj = FILM_ERA_OPTIONS[(activeEraIndex + 1) % FILM_ERA_OPTIONS.length];
+
+  const activeTempoObj = FILM_TEMPO_OPTIONS[activeTempoIndex] || FILM_TEMPO_OPTIONS[0];
+  const prevTempoObj = FILM_TEMPO_OPTIONS[(activeTempoIndex - 1 + FILM_TEMPO_OPTIONS.length) % FILM_TEMPO_OPTIONS.length];
+  const nextTempoObj = FILM_TEMPO_OPTIONS[(activeTempoIndex + 1) % FILM_TEMPO_OPTIONS.length];
+
+  useEffect(() => {
+    setActiveTempoSegment(0);
+    if (activePresetMenu !== 'film' || filmSetupTab !== 'tempo') return;
+    const count = activeTempoObj.segments.length;
+    if (count <= 1) return;
+    const timer = setInterval(() => {
+      setActiveTempoSegment(prev => (prev + 1) % count);
+    }, activeTempoObj.speedMs || 600);
+    return () => clearInterval(timer);
+  }, [activePresetMenu, filmSetupTab, activeTempoObj]);
+
+  const handleUpdateFilmSetup = (patch: {
+    filmGenre?: string;
+    filmEra?: string;
+    filmEraYear?: string;
+    filmTempo?: string;
+    filmLens?: string;
+  }) => {
+    const nextGenre = patch.filmGenre !== undefined ? patch.filmGenre : currentGenre;
+    const nextEra = patch.filmEra !== undefined ? patch.filmEra : currentEra;
+    const nextEraYear = patch.filmEraYear !== undefined ? patch.filmEraYear : currentEraYear;
+    const nextTempo = patch.filmTempo !== undefined ? patch.filmTempo : currentTempo;
+    const nextLens = patch.filmLens !== undefined ? patch.filmLens : currentLens;
+    const summary = formatFilmSetupSummary(nextGenre, nextEra, nextEraYear, nextTempo, nextLens);
+    updateActiveScene({
+      filmGenre: nextGenre,
+      filmEra: nextEra,
+      filmEraYear: nextEraYear,
+      filmTempo: nextTempo,
+      filmLens: nextLens,
+      filmSetup: summary,
+    });
+  };
+
+  const handleResetFilmSetup = () => {
+    updateActiveScene({
+      filmGenre: 'Auto',
+      filmEra: 'Auto',
+      filmEraYear: '',
+      filmTempo: 'Auto',
+      filmLens: 'Auto',
+      filmSetup: 'Auto',
+    });
   };
 
   const handleAddScene = () => {
@@ -872,99 +1308,191 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
           <div className="flex-1 flex flex-col gap-3 relative">
             
             {/* Top Row: Module Director Capsules */}
-            <div className="grid grid-cols-5 gap-2.5">
+            <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
               
               {/* 1. References */}
               <button
                 type="button"
                 onClick={() => setActivePresetMenu(activePresetMenu === 'references' ? null : 'references')}
-                className={`flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition-all text-left group ${
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all text-left group min-w-0 ${
                   activePresetMenu === 'references'
                     ? 'border-lime-400/60 bg-lime-400/10 shadow-lg shadow-lime-400/10'
                     : 'border-white/10 bg-[#141822] hover:border-white/20 hover:bg-[#1a202c]'
                 }`}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-black/40 border border-white/10 text-gray-300 group-hover:text-lime-400 transition-colors">
-                  <Plus size={16} />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-black/40 border border-white/10 text-gray-300 group-hover:text-lime-400 transition-colors">
+                  <Plus size={15} />
                 </div>
                 <div className="truncate">
-                  <div className="text-[11px] text-gray-400">References</div>
+                  <div className="text-[10px] text-gray-400">References</div>
                   <div className="text-xs font-semibold text-white">{references.length}/50</div>
                 </div>
               </button>
 
-              {/* 2. Film setup */}
+              {/* 2. Genre */}
               <button
                 type="button"
-                onClick={() => setActivePresetMenu(activePresetMenu === 'film' ? null : 'film')}
-                className={`flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition-all text-left group ${
-                  activePresetMenu === 'film'
+                onClick={() => {
+                  setFilmSetupTab('genre');
+                  setActivePresetMenu(activePresetMenu === 'genre' ? null : 'genre');
+                }}
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all text-left group min-w-0 ${
+                  activePresetMenu === 'genre' || (activePresetMenu === 'film' && filmSetupTab === 'genre')
                     ? 'border-lime-400/60 bg-lime-400/10 shadow-lg shadow-lime-400/10'
                     : 'border-white/10 bg-[#141822] hover:border-white/20 hover:bg-[#1a202c]'
                 }`}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30 text-amber-300">
-                  <Film size={17} />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500/20 to-indigo-500/10 border border-purple-500/30 text-purple-300">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <rect x="2" y="4" width="20" height="16" rx="3" />
+                    <line x1="6" y1="4" x2="6" y2="20" />
+                    <line x1="18" y1="4" x2="18" y2="20" />
+                  </svg>
                 </div>
                 <div className="truncate">
-                  <div className="text-[11px] text-gray-400">Film setup</div>
-                  <div className="text-xs font-semibold text-white truncate">{activeScene.filmSetup}</div>
+                  <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                    <span>Genre</span>
+                    {currentGenre !== 'Auto' && <span className="w-1.5 h-1.5 rounded-full bg-lime-400 shrink-0" />}
+                  </div>
+                  <div className="text-xs font-semibold text-white truncate">{currentGenre}</div>
                 </div>
               </button>
 
-              {/* 3. Camera */}
+              {/* 3. Era */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFilmSetupTab('era');
+                  setActivePresetMenu(activePresetMenu === 'era' ? null : 'era');
+                }}
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all text-left group min-w-0 ${
+                  activePresetMenu === 'era' || (activePresetMenu === 'film' && filmSetupTab === 'era')
+                    ? 'border-lime-400/60 bg-lime-400/10 shadow-lg shadow-lime-400/10'
+                    : 'border-white/10 bg-[#141822] hover:border-white/20 hover:bg-[#1a202c]'
+                }`}
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 text-emerald-300">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <path d="M5 22h14" />
+                    <path d="M5 2h14" />
+                    <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
+                    <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+                  </svg>
+                </div>
+                <div className="truncate">
+                  <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                    <span>Era</span>
+                    {(currentEra !== 'Auto' || currentEraYear) && <span className="w-1.5 h-1.5 rounded-full bg-lime-400 shrink-0" />}
+                  </div>
+                  <div className="text-xs font-semibold text-white truncate">{currentEraYear || currentEra}</div>
+                </div>
+              </button>
+
+              {/* 4. Tempo */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFilmSetupTab('tempo');
+                  setActivePresetMenu(activePresetMenu === 'tempo' ? null : 'tempo');
+                }}
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all text-left group min-w-0 ${
+                  activePresetMenu === 'tempo' || (activePresetMenu === 'film' && filmSetupTab === 'tempo')
+                    ? 'border-lime-400/60 bg-lime-400/10 shadow-lg shadow-lime-400/10'
+                    : 'border-white/10 bg-[#141822] hover:border-white/20 hover:bg-[#1a202c]'
+                }`}
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500/20 to-pink-500/10 border border-rose-500/30 text-rose-300">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <path d="M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8H4Z" />
+                    <path d="m4 11-.88-2.87a2 2 0 0 1 1.33-2.5l11.48-3.5a2 2 0 0 1 2.5 1.32l.87 2.87L4 11.01Z" />
+                    <path d="m6.6 4.99 3.38 4.2" />
+                    <path d="m11.86 3.38 3.38 4.2" />
+                  </svg>
+                </div>
+                <div className="truncate">
+                  <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                    <span>Tempo</span>
+                    {currentTempo !== 'Auto' && <span className="w-1.5 h-1.5 rounded-full bg-lime-400 shrink-0" />}
+                  </div>
+                  <div className="text-xs font-semibold text-white truncate">{currentTempo}</div>
+                </div>
+              </button>
+
+              {/* 5. Film & Lens */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFilmSetupTab('lens');
+                  setActivePresetMenu(activePresetMenu === 'film' ? null : 'film');
+                }}
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all text-left group min-w-0 ${
+                  activePresetMenu === 'film' && filmSetupTab === 'lens'
+                    ? 'border-lime-400/60 bg-lime-400/10 shadow-lg shadow-lime-400/10'
+                    : 'border-white/10 bg-[#141822] hover:border-white/20 hover:bg-[#1a202c]'
+                }`}
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30 text-amber-300">
+                  <Film size={15} />
+                </div>
+                <div className="truncate">
+                  <div className="text-[10px] text-gray-400">Film setup</div>
+                  <div className="text-xs font-semibold text-white truncate">{currentLens}</div>
+                </div>
+              </button>
+
+              {/* 6. Camera */}
               <button
                 type="button"
                 onClick={() => setActivePresetMenu(activePresetMenu === 'camera' ? null : 'camera')}
-                className={`flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition-all text-left group ${
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all text-left group min-w-0 ${
                   activePresetMenu === 'camera'
                     ? 'border-lime-400/60 bg-lime-400/10 shadow-lg shadow-lime-400/10'
                     : 'border-white/10 bg-[#141822] hover:border-white/20 hover:bg-[#1a202c]'
                 }`}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border border-cyan-500/30 text-cyan-300">
-                  <Camera size={17} />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/10 border border-cyan-500/30 text-cyan-300">
+                  <Camera size={15} />
                 </div>
                 <div className="truncate">
-                  <div className="text-[11px] text-gray-400">Camera</div>
+                  <div className="text-[10px] text-gray-400">Camera</div>
                   <div className="text-xs font-semibold text-white truncate">{activeScene.cameraMovement}</div>
                 </div>
               </button>
 
-              {/* 4. Color palette */}
+              {/* 7. Color palette */}
               <button
                 type="button"
                 onClick={() => setActivePresetMenu(activePresetMenu === 'color' ? null : 'color')}
-                className={`flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition-all text-left group ${
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all text-left group min-w-0 ${
                   activePresetMenu === 'color'
                     ? 'border-lime-400/60 bg-lime-400/10 shadow-lg shadow-lime-400/10'
                     : 'border-white/10 bg-[#141822] hover:border-white/20 hover:bg-[#1a202c]'
                 }`}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500/20 to-violet-500/10 border border-pink-500/30 text-pink-300">
-                  <Palette size={17} />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-pink-500/20 to-violet-500/10 border border-pink-500/30 text-pink-300">
+                  <Palette size={15} />
                 </div>
                 <div className="truncate">
-                  <div className="text-[11px] text-gray-400">Color palette</div>
+                  <div className="text-[10px] text-gray-400">Color palette</div>
                   <div className="text-xs font-semibold text-white truncate">{activeScene.colorPalette}</div>
                 </div>
               </button>
 
-              {/* 5. Lighting */}
+              {/* 8. Lighting */}
               <button
                 type="button"
                 onClick={() => setActivePresetMenu(activePresetMenu === 'lighting' ? null : 'lighting')}
-                className={`flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 transition-all text-left group ${
+                className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all text-left group min-w-0 ${
                   activePresetMenu === 'lighting'
                     ? 'border-lime-400/60 bg-lime-400/10 shadow-lg shadow-lime-400/10'
                     : 'border-white/10 bg-[#141822] hover:border-white/20 hover:bg-[#1a202c]'
                 }`}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-500/10 border border-yellow-500/30 text-yellow-300">
-                  <Sun size={17} />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-500/20 to-amber-500/10 border border-yellow-500/30 text-yellow-300">
+                  <Sun size={15} />
                 </div>
                 <div className="truncate">
-                  <div className="text-[11px] text-gray-400">Lighting</div>
+                  <div className="text-[10px] text-gray-400">Lighting</div>
                   <div className="text-xs font-semibold text-white truncate">{activeScene.lighting}</div>
                 </div>
               </button>
@@ -978,26 +1506,575 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
                 <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
                   <div className="flex items-center gap-2">
                     {activePresetMenu === 'references' && <Plus className="text-lime-400" size={18} />}
-                    {activePresetMenu === 'film' && <Film className="text-amber-400" size={18} />}
+                    {(activePresetMenu === 'film' || activePresetMenu === 'genre' || activePresetMenu === 'era' || activePresetMenu === 'tempo') && <Film className="text-amber-400" size={18} />}
                     {activePresetMenu === 'camera' && <Camera className="text-cyan-400" size={18} />}
                     {activePresetMenu === 'color' && <Palette className="text-pink-400" size={18} />}
                     {activePresetMenu === 'lighting' && <Sun className="text-yellow-400" size={18} />}
                     <h4 className="text-sm font-semibold capitalize text-white">
                       {activePresetMenu === 'references' && 'Karakter & Mekan Referansları (0/50)'}
-                      {activePresetMenu === 'film' && 'Film & Lens Kurulumu (Film Setup)'}
+                      {(activePresetMenu === 'film' || activePresetMenu === 'genre' || activePresetMenu === 'era' || activePresetMenu === 'tempo') && 'Film & Lens Kurulumu (Film Setup)'}
                       {activePresetMenu === 'camera' && 'Kamera Hareketleri (Camera Motions)'}
                       {activePresetMenu === 'color' && 'Renk Paleti ve Tonlama (Color Grading)'}
                       {activePresetMenu === 'lighting' && 'Sinematik Işık Kurulumu (Lighting Setup)'}
                     </h4>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setActivePresetMenu(null)}
-                    className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10"
-                  >
-                    <X size={16} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {(activePresetMenu === 'film' || activePresetMenu === 'genre' || activePresetMenu === 'era' || activePresetMenu === 'tempo') && (
+                      <button
+                        type="button"
+                        onClick={handleResetFilmSetup}
+                        className="text-xs text-gray-400 hover:text-white px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
+                      >
+                        Reset all
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActivePresetMenu(null)}
+                      className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                 </div>
+
+                {/* FILM SETUP: GENRE, ERA, TEMPO, LENS BUTTONS (Kullanıcının "buraya genre , era , tempo butonları ekle" isteği) */}
+                {(activePresetMenu === 'film' || activePresetMenu === 'genre' || activePresetMenu === 'era' || activePresetMenu === 'tempo') && (
+                  <div className="flex flex-col gap-4">
+                    {/* Switcher Buttons: Genre, Era, Tempo, Lens & Film */}
+                    <div className="flex items-center gap-2 bg-[#0c1018] p-1.5 rounded-xl border border-white/10">
+                      {/* Genre Button */}
+                      <button
+                        type="button"
+                        onClick={() => setFilmSetupTab('genre')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${
+                          filmSetupTab === 'genre'
+                            ? 'bg-lime-400 text-black border-lime-400 shadow-md shadow-lime-400/20'
+                            : 'bg-white/[0.03] text-gray-300 border-white/5 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                          <rect x="2" y="4" width="20" height="16" rx="3" />
+                          <line x1="6" y1="4" x2="6" y2="20" />
+                          <line x1="18" y1="4" x2="18" y2="20" />
+                        </svg>
+                        <span>Genre</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                          filmSetupTab === 'genre' ? 'bg-black/20 text-black' : currentGenre !== 'Auto' ? 'bg-lime-400/20 text-lime-300' : 'text-gray-400'
+                        }`}>
+                          {currentGenre}
+                        </span>
+                      </button>
+
+                      {/* Era Button */}
+                      <button
+                        type="button"
+                        onClick={() => setFilmSetupTab('era')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${
+                          filmSetupTab === 'era'
+                            ? 'bg-lime-400 text-black border-lime-400 shadow-md shadow-lime-400/20'
+                            : 'bg-white/[0.03] text-gray-300 border-white/5 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                          <path d="M5 22h14" />
+                          <path d="M5 2h14" />
+                          <path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22" />
+                          <path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2" />
+                        </svg>
+                        <span>Era</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                          filmSetupTab === 'era' ? 'bg-black/20 text-black' : (currentEra !== 'Auto' || currentEraYear) ? 'bg-lime-400/20 text-lime-300' : 'text-gray-400'
+                        }`}>
+                          {currentEraYear || currentEra}
+                        </span>
+                      </button>
+
+                      {/* Tempo Button */}
+                      <button
+                        type="button"
+                        onClick={() => setFilmSetupTab('tempo')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${
+                          filmSetupTab === 'tempo'
+                            ? 'bg-lime-400 text-black border-lime-400 shadow-md shadow-lime-400/20'
+                            : 'bg-white/[0.03] text-gray-300 border-white/5 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                          <path d="M4 11v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8H4Z" />
+                          <path d="m4 11-.88-2.87a2 2 0 0 1 1.33-2.5l11.48-3.5a2 2 0 0 1 2.5 1.32l.87 2.87L4 11.01Z" />
+                          <path d="m6.6 4.99 3.38 4.2" />
+                          <path d="m11.86 3.38 3.38 4.2" />
+                        </svg>
+                        <span>Tempo</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                          filmSetupTab === 'tempo' ? 'bg-black/20 text-black' : currentTempo !== 'Auto' ? 'bg-lime-400/20 text-lime-300' : 'text-gray-400'
+                        }`}>
+                          {currentTempo}
+                        </span>
+                      </button>
+
+                      {/* Lens & Film Button */}
+                      <button
+                        type="button"
+                        onClick={() => setFilmSetupTab('lens')}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all border ${
+                          filmSetupTab === 'lens'
+                            ? 'bg-lime-400 text-black border-lime-400 shadow-md shadow-lime-400/20'
+                            : 'bg-white/[0.03] text-gray-300 border-white/5 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <Film size={14} className="shrink-0" />
+                        <span>Lens & Film</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${
+                          filmSetupTab === 'lens' ? 'bg-black/20 text-black' : currentLens !== 'Auto' ? 'bg-lime-400/20 text-lime-300' : 'text-gray-400'
+                        }`}>
+                          {currentLens}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* 1. GENRE TAB VIEW */}
+                    {filmSetupTab === 'genre' && (
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-xs font-bold text-white">Select genre</span>
+                            <p className="text-[11px] text-gray-400">Story conventions the model should follow</p>
+                          </div>
+                          <span className="text-[11px] text-gray-400 bg-black/40 border border-white/10 px-2.5 py-1 rounded-lg">
+                            {activeGenreObj.desc}
+                          </span>
+                        </div>
+
+                        {/* Arched Wheel Visual Area */}
+                        <div className="relative flex items-center justify-center h-[210px] overflow-hidden rounded-2xl bg-black/30 border border-white/5">
+                          <div className="absolute top-2 left-1/2 -translate-x-1/2 w-[580px] h-[580px] rounded-full border-t border-white/[0.08] pointer-events-none" />
+
+                          {/* Left Tilted Card */}
+                          <div
+                            onClick={() => handleUpdateFilmSetup({ filmGenre: prevGenreObj.name })}
+                            title={`Önceki: ${prevGenreObj.name}`}
+                            className="absolute -left-6 bottom-3 w-[180px] h-[110px] rounded-[20px] border-[6px] border-[#131416] overflow-hidden -rotate-[38deg] opacity-40 hover:opacity-75 transition-all cursor-pointer shadow-xl z-10"
+                          >
+                            <div className={`w-full h-full bg-gradient-to-br ${prevGenreObj.gradient} relative`}>
+                              {prevGenreObj.image && (
+                                <img src={prevGenreObj.image} alt={prevGenreObj.name} className="w-full h-full object-cover" />
+                              )}
+                              {prevGenreObj.isAuto && (
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.2) 0px, rgba(255,255,255,0.03) 4px, rgba(0,0,0,0.35) 8px, rgba(255,255,255,0.15) 12px)',
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Center Card */}
+                          <div className="relative w-[280px] h-[160px] rounded-[22px] border-[8px] border-[#131416] shadow-2xl overflow-hidden z-20">
+                            <div className={`w-full h-full bg-gradient-to-br ${activeGenreObj.gradient} relative`}>
+                              {activeGenreObj.image ? (
+                                <img
+                                  src={activeGenreObj.image}
+                                  alt={activeGenreObj.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full relative overflow-hidden bg-gradient-to-tr from-indigo-500 via-amber-300/80 to-sky-400">
+                                  <div className="absolute -top-10 -left-10 w-44 h-44 rounded-full bg-orange-400/80 blur-xl" />
+                                  <div className="absolute -bottom-10 -right-10 w-48 h-48 rounded-full bg-blue-600/80 blur-xl" />
+                                  <div
+                                    className="absolute inset-0 backdrop-blur-[2px]"
+                                    style={{
+                                      backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.28) 0px, rgba(255,255,255,0.05) 3px, rgba(0,0,0,0.35) 6px, rgba(255,255,255,0.18) 9px)',
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Right Tilted Card */}
+                          <div
+                            onClick={() => handleUpdateFilmSetup({ filmGenre: nextGenreObj.name })}
+                            title={`Sonraki: ${nextGenreObj.name}`}
+                            className="absolute -right-6 bottom-3 w-[180px] h-[110px] rounded-[20px] border-[6px] border-[#131416] overflow-hidden rotate-[38deg] opacity-40 hover:opacity-75 transition-all cursor-pointer shadow-xl z-10"
+                          >
+                            <div className={`w-full h-full bg-gradient-to-br ${nextGenreObj.gradient} relative`}>
+                              {nextGenreObj.image && (
+                                <img src={nextGenreObj.image} alt={nextGenreObj.name} className="w-full h-full object-cover" />
+                              )}
+                              {nextGenreObj.isAuto && (
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.2) 0px, rgba(255,255,255,0.03) 4px, rgba(0,0,0,0.35) 8px, rgba(255,255,255,0.15) 12px)',
+                                  }}
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Controls & Quick Chips */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 flex-wrap flex-1 mr-4">
+                            {FILM_GENRE_OPTIONS.map(g => (
+                              <button
+                                key={g.id}
+                                type="button"
+                                onClick={() => handleUpdateFilmSetup({ filmGenre: g.name })}
+                                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                                  currentGenre === g.name
+                                    ? 'bg-lime-400 text-black border-lime-400 font-bold'
+                                    : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                                }`}
+                              >
+                                {g.name}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Stepper */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateFilmSetup({ filmGenre: prevGenreObj.name })}
+                              className="w-8 h-8 rounded-full bg-[#1b202c] hover:bg-[#252b3b] border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-all active:scale-95"
+                            >
+                              <ChevronLeft size={16} />
+                            </button>
+                            <div className="min-w-[90px] px-4 py-1.5 rounded-full bg-[#1b202c] border border-white/15 text-center text-xs font-bold text-white">
+                              {activeGenreObj.name}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateFilmSetup({ filmGenre: nextGenreObj.name })}
+                              className="w-8 h-8 rounded-full bg-[#1b202c] hover:bg-[#252b3b] border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-all active:scale-95"
+                            >
+                              <ChevronRight size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 2. ERA TAB VIEW */}
+                    {filmSetupTab === 'era' && (
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-xs font-bold text-white">Select era</span>
+                            <p className="text-[11px] text-gray-400">The period the film belongs to</p>
+                          </div>
+
+                          {/* Year Specification */}
+                          <div className="flex items-center gap-2 bg-[#0c1018] border border-white/10 rounded-xl px-3 py-1.5">
+                            <span className="text-[11px] font-semibold text-gray-300">Tam Yıl:</span>
+                            <input
+                              type="text"
+                              placeholder="Örn: 1984"
+                              value={currentEraYear}
+                              onChange={e => {
+                                const val = e.target.value;
+                                handleUpdateFilmSetup({ filmEraYear: val });
+                              }}
+                              className="w-20 bg-transparent text-xs font-mono font-bold text-lime-400 placeholder-gray-500 focus:outline-none text-center"
+                            />
+                            {currentEraYear && (
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateFilmSetup({ filmEraYear: '' })}
+                                className="text-gray-400 hover:text-white"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Center Preview Card */}
+                        <div className="flex items-center justify-center h-[180px] rounded-2xl bg-black/30 border border-white/5">
+                          <div className="relative w-[280px] h-[155px] rounded-[22px] border-[8px] border-[#131416] shadow-2xl overflow-hidden">
+                            {activeEraObj.isAuto && !currentEraYear ? (
+                              <div className="w-full h-full relative overflow-hidden bg-gradient-to-tr from-blue-600 via-orange-300 to-indigo-500">
+                                <div className="absolute top-2 left-6 w-36 h-36 rounded-full bg-orange-400/90 blur-xl" />
+                                <div className="absolute bottom-2 right-6 w-40 h-40 rounded-full bg-amber-300/80 blur-xl" />
+                                <div className="absolute inset-y-0 left-1/3 w-28 bg-blue-700/80 blur-xl" />
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.32) 0px, rgba(255,255,255,0.06) 3px, rgba(15,23,42,0.45) 6px, rgba(255,255,255,0.2) 9px)',
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-br ${activeEraObj.gradient} relative`}>
+                                {activeEraObj.image && (
+                                  <img src={activeEraObj.image} alt={activeEraObj.name} className="w-full h-full object-cover" />
+                                )}
+                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-2.5 text-center">
+                                  <span className="text-xs font-bold text-white">
+                                    {currentEraYear ? `Yıl: ${currentEraYear}` : activeEraObj.yearRange}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Ruler & Stepper */}
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between px-6 h-6 relative">
+                            {Array.from({ length: 29 }).map((_, idx) => {
+                              const isCenter = idx === 14;
+                              const isMajor = idx % 5 === 0;
+                              const distFromCenter = Math.abs(idx - 14);
+                              const opacity = Math.max(0.12, 1 - distFromCenter * 0.055);
+                              if (isCenter) {
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="w-[2.5px] h-6 bg-lime-400 rounded-full shadow-[0_0_8px_rgba(223,255,0,0.8)]"
+                                  />
+                                );
+                              }
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`w-[1px] rounded-full bg-white ${isMajor ? 'h-4' : 'h-2.5'}`}
+                                  style={{ opacity }}
+                                />
+                              );
+                            })}
+                          </div>
+
+                          <div className="flex items-center justify-center gap-5">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateFilmSetup({ filmEra: prevEraObj.name, filmEraYear: '' })}
+                              className="w-24 text-right text-sm font-semibold text-white/30 hover:text-white/70 transition-colors truncate"
+                            >
+                              {prevEraObj.name}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateFilmSetup({ filmEra: prevEraObj.name, filmEraYear: '' })}
+                              className="w-8 h-8 rounded-full bg-[#1b202c] hover:bg-[#252b3b] border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-all active:scale-95"
+                            >
+                              <ChevronLeft size={15} />
+                            </button>
+
+                            <div className="min-w-[120px] text-center">
+                              <span className="text-xl font-extrabold text-lime-400 tracking-tight">
+                                {currentEraYear || activeEraObj.name}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateFilmSetup({ filmEra: nextEraObj.name, filmEraYear: '' })}
+                              className="w-8 h-8 rounded-full bg-[#1b202c] hover:bg-[#252b3b] border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-all active:scale-95"
+                            >
+                              <ChevronRight size={15} />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateFilmSetup({ filmEra: nextEraObj.name, filmEraYear: '' })}
+                              className="w-24 text-left text-sm font-semibold text-white/30 hover:text-white/70 transition-colors truncate"
+                            >
+                              {nextEraObj.name}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3. TEMPO TAB VIEW */}
+                    {filmSetupTab === 'tempo' && (
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-xs font-bold text-white">Select tempo</span>
+                            <p className="text-[11px] text-gray-400">Pacing of the montage</p>
+                          </div>
+                          <span className="text-[11px] text-gray-400 bg-black/40 border border-white/10 px-2.5 py-1 rounded-lg">
+                            {activeTempoObj.desc}
+                          </span>
+                        </div>
+
+                        {/* 3-Card Carousel */}
+                        <div className="relative flex items-center justify-center gap-4 h-[190px] overflow-hidden rounded-2xl bg-black/30 border border-white/5">
+                          {/* Left Card */}
+                          <div
+                            onClick={() => handleUpdateFilmSetup({ filmTempo: prevTempoObj.name })}
+                            title={`Önceki: ${prevTempoObj.name}`}
+                            className="w-[180px] h-[115px] rounded-[20px] border-[6px] border-[#131416] overflow-hidden shrink-0 cursor-pointer opacity-50 hover:opacity-85 transition-all -ml-16 shadow-lg"
+                          >
+                            {prevTempoObj.isAuto ? (
+                              <div className="w-full h-full relative overflow-hidden bg-gradient-to-tr from-pink-600 via-rose-400 to-fuchsia-800">
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.28) 0px, rgba(255,255,255,0.04) 3px, rgba(0,0,0,0.4) 6px, rgba(255,255,255,0.16) 9px)',
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-br ${prevTempoObj.gradient} relative`}>
+                                {prevTempoObj.image && (
+                                  <img src={prevTempoObj.image} alt={prevTempoObj.name} className="w-full h-full object-cover" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Center Card with Segmented Montage Bar */}
+                          <div className="w-[280px] h-[160px] rounded-[22px] border-[8px] border-[#131416] shadow-2xl overflow-hidden shrink-0 relative z-10">
+                            {activeTempoObj.isAuto ? (
+                              <div className="w-full h-full relative overflow-hidden bg-gradient-to-tr from-pink-600 via-rose-400 to-amber-400">
+                                <div className="absolute -top-8 left-8 w-36 h-36 rounded-full bg-rose-300/80 blur-xl" />
+                                <div className="absolute -bottom-8 right-8 w-40 h-40 rounded-full bg-fuchsia-700/80 blur-xl" />
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.3) 0px, rgba(255,255,255,0.05) 3px, rgba(0,0,0,0.4) 6px, rgba(255,255,255,0.18) 9px)',
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-br ${activeTempoObj.gradient} relative`}>
+                                {activeTempoObj.image && (
+                                  <img
+                                    src={activeTempoObj.image}
+                                    alt={activeTempoObj.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                )}
+                              </div>
+                            )}
+
+                            {/* Segmented Montage Cut Pacing Bar */}
+                            <div className="absolute bottom-3 left-4 right-4 flex items-center gap-1.5 z-20">
+                              {activeTempoObj.segments.map((seg, sIdx) => {
+                                const isActiveSeg = sIdx === activeTempoSegment;
+                                return (
+                                  <div
+                                    key={sIdx}
+                                    style={{ flex: seg }}
+                                    className={`h-1.5 rounded-full transition-all duration-200 ${
+                                      isActiveSeg
+                                        ? 'bg-lime-400 shadow-[0_0_8px_rgba(223,255,0,0.8)]'
+                                        : 'bg-white/45'
+                                    }`}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Right Card */}
+                          <div
+                            onClick={() => handleUpdateFilmSetup({ filmTempo: nextTempoObj.name })}
+                            title={`Sonraki: ${nextTempoObj.name}`}
+                            className="w-[180px] h-[115px] rounded-[20px] border-[6px] border-[#131416] overflow-hidden shrink-0 cursor-pointer opacity-50 hover:opacity-85 transition-all -mr-16 shadow-lg"
+                          >
+                            {nextTempoObj.isAuto ? (
+                              <div className="w-full h-full relative overflow-hidden bg-gradient-to-tr from-pink-600 via-rose-400 to-fuchsia-800">
+                                <div
+                                  className="absolute inset-0"
+                                  style={{
+                                    backgroundImage: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.28) 0px, rgba(255,255,255,0.04) 3px, rgba(0,0,0,0.4) 6px, rgba(255,255,255,0.16) 9px)',
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-br ${nextTempoObj.gradient} relative`}>
+                                {nextTempoObj.image && (
+                                  <img src={nextTempoObj.image} alt={nextTempoObj.name} className="w-full h-full object-cover" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Controls & Quick Chips */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 flex-wrap flex-1 mr-4">
+                            {FILM_TEMPO_OPTIONS.map(t => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => handleUpdateFilmSetup({ filmTempo: t.name })}
+                                className={`px-2 py-0.5 rounded-lg text-[11px] font-semibold transition-all border ${
+                                  currentTempo === t.name
+                                    ? 'bg-lime-400 text-black border-lime-400 font-bold'
+                                    : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10 hover:text-white'
+                                }`}
+                              >
+                                {t.name}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateFilmSetup({ filmTempo: prevTempoObj.name })}
+                              className="w-8 h-8 rounded-full bg-[#1b202c] hover:bg-[#252b3b] border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-all active:scale-95"
+                            >
+                              <ChevronLeft size={16} />
+                            </button>
+                            <div className="min-w-[90px] px-4 py-1.5 rounded-full bg-[#1b202c] border border-white/15 text-center text-xs font-bold text-white">
+                              {activeTempoObj.name}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateFilmSetup({ filmTempo: nextTempoObj.name })}
+                              className="w-8 h-8 rounded-full bg-[#1b202c] hover:bg-[#252b3b] border border-white/10 flex items-center justify-center text-gray-300 hover:text-white transition-all active:scale-95"
+                            >
+                              <ChevronRight size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 4. LENS & FILM TAB VIEW (Matches media_1793218772651_9f1cf3ea.png) */}
+                    {filmSetupTab === 'lens' && (
+                      <div className="grid grid-cols-4 gap-2.5">
+                        {FILM_LENS_PRESETS.map(preset => {
+                          const isSelected = (activeScene.filmLens || 'Auto') === preset.name || (!activeScene.filmLens && preset.id === 'auto');
+                          return (
+                            <div
+                              key={preset.id}
+                              onClick={() => handleUpdateFilmSetup({ filmLens: preset.name })}
+                              className={`cursor-pointer rounded-xl border p-3 flex flex-col justify-between transition-all ${
+                                isSelected
+                                  ? 'border-lime-400 bg-lime-400/10 shadow-md shadow-lime-400/10'
+                                  : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-semibold text-white">{preset.name}</span>
+                                  <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-mono">
+                                    {preset.badge}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-gray-400 leading-snug">{preset.desc}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* References View */}
                 {activePresetMenu === 'references' && (
@@ -1009,36 +2086,6 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
                       <p className="text-xs font-medium text-white mb-1">Görsel referans sürükleyin veya seçin</p>
                       <p className="text-[11px] text-gray-400">Yüz kilitleme, kıyafet koruma veya arka plan mekan tutarlılığı sağlar</p>
                     </div>
-                  </div>
-                )}
-
-                {/* Film Setup Presets */}
-                {activePresetMenu === 'film' && (
-                  <div className="grid grid-cols-4 gap-2.5">
-                    {FILM_SETUP_PRESETS.map(preset => (
-                      <div
-                        key={preset.id}
-                        onClick={() => {
-                          updateActiveScene({ filmSetup: preset.name });
-                          setActivePresetMenu(null);
-                        }}
-                        className={`cursor-pointer rounded-xl border p-3 flex flex-col justify-between transition-all ${
-                          activeScene.filmSetup === preset.name
-                            ? 'border-lime-400 bg-lime-400/10 shadow-md shadow-lime-400/10'
-                            : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
-                        }`}
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-semibold text-white">{preset.name}</span>
-                            <span className="text-[9px] bg-white/10 px-1.5 py-0.5 rounded text-gray-300 font-mono">
-                              {preset.badge}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-gray-400 leading-snug">{preset.desc}</p>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
 
