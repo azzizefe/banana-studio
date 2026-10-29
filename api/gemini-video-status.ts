@@ -100,7 +100,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         if (!dlRes.ok) {
-          if (dlRes.status >= 400 && dlRes.status < 500) {
+          // 408 (timeout) and 429 (rate limit) are temporary; other 4xx are permanent.
+          if (dlRes.status >= 400 && dlRes.status < 500 && dlRes.status !== 408 && dlRes.status !== 429) {
             return res.status(200).json({
               status: 'failed',
               error: `Gemini video download was rejected with HTTP ${dlRes.status}.`,
