@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, type GenerateVideosParameters, type Image } from '@google/genai';
 import { applyCors, requireUser } from './_lib/auth.js';
 import { prepareTaskRegistry, registerProviderTask, requireProviderTask } from './_lib/providerTasks.js';
 import { isReferenceUrl } from './_lib/providerMedia.js';
@@ -124,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ai = new GoogleGenAI({ apiKey });
     
     // Prepare image if provided
-    let imageParam: any = undefined;
+    let imageParam: Image | undefined = undefined;
     if (referenceImages.length > 0 && referenceImages[0].data) {
       const dataUri = referenceImages[0].data;
       const base64Data = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
@@ -133,25 +133,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         imageBytes: base64Data,
         mimeType,
       };
-    } else if (imageUrls.length > 0) {
-      imageParam = {
-        uri: imageUrls[0],
-      };
     }
 
-    const genParams: any = {
+    const trimmedPrompt = prompt.trim();
+    const source: GenerateVideosParameters['source'] = {
+      ...(trimmedPrompt ? { prompt: trimmedPrompt } : {}),
+      ...(imageParam ? { image: imageParam } : {}),
+    };
+
+    const genParams: GenerateVideosParameters = {
       model: 'gemini-omni-1.1-flash',
-      prompt: prompt.trim() || undefined,
+      source,
       config: {
         aspectRatio,
         durationSeconds: durationNum,
         resolution: quality,
       },
     };
-
-    if (imageParam) {
-      genParams.image = imageParam;
-    }
 
     const operation = await ai.models.generateVideos(genParams);
     const taskId = operation.name;
