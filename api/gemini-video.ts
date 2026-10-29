@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI, type GenerateVideosParameters, type Image } from '@google/genai';
-import { applyCors, requireUser } from './_lib/auth.js';
+import { applyCors, requireUser, createUserScopedClient } from './_lib/auth.js';
 import { prepareTaskRegistry, registerProviderTask, requireProviderTask } from './_lib/providerTasks.js';
 import { providerImageData } from './_lib/providerMedia.js';
 
@@ -91,6 +91,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: `Invalid quality: ${quality}. Supported qualities are 720p and 1080p.` });
   }
 
+  // Validate and prepare reference image BEFORE claim (normalizes raw base64 and enforces user storage path ownership)
+  let imageParam: Image | undefined = undefined;
+  if (referenceImages.length > 0 && referenceImages[0]?.data) {
+    let rawData = referenceImages[0].data.trim();
+    const mimeType = referenceImages[0].mimeType || 'image/jpeg';
+
+    // Normalize raw base64 to data URI
+    if (!rawData.startsWith('http://') && !rawData.startsWith('https://') && !rawData.startsWith('data:')) {
+      rawData = `data:${mimeType};base64,${rawData}`;
+    }
+
+    // Verify storage path ownership if reference is a storage URL
+    if (rawData.startsWith('http://') || rawData.startsWith('https://')) {
+      try {
+        const parsedUrl = new URL(rawData);
+        const match = parsedUrl.pathname.match(/^\/storage\/v1\/object\/(?:authenticated|sign|public)\/media\/(.+)$/);
+        if (match) {
+          const storagePath = decodeURIComponent(match[1]);
+          if (!storagePath.startsWith(`${user.id}/`)) {
+            return res.status(403).json({ error: 'Unauthorized reference image: storage path does not belong to user.' });
+          }
+        }
+      } catch {
+        return res.status(400).json({ error: 'Invalid reference image URL' });
+      }
+    }
+
+    const userDb = createUserScopedClient(req);
+    let dataUri: string;
+    try {
+      dataUri = await providerImageData(userDb, rawData);
+    } catch (imgErr: any) {
+      return res.status(400).json({ error: imgErr.message || 'Invalid reference image.' });
+    }
+
+    const base64Data = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
+    const detectedMime = referenceImages[0].mimeType || (dataUri.startsWith('data:') ? dataUri.slice(5, dataUri.indexOf(';')) : 'image/jpeg');
+    imageParam = {
+      imageBytes: base64Data,
+      mimeType: detectedMime,
+    };
+  }
+
   // Idempotency and gallery claim check
   const generationId = body.generationId;
   const { data: saved, error: readError } = await writer.from('generations')
@@ -99,7 +142,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!saved || saved.user_id !== user.id || saved.type !== 'video') return res.status(404).json({ error: 'Saved video generation not found' });
   const metadata = saved.metadata && typeof saved.metadata === 'object' && !Array.isArray(saved.metadata) ? saved.metadata : {};
   if (saved.task_id) {
-    if (!await requireProviderTask(req, res, 'gemini', saved.task_id)) return;
+    const userDb = createUserScopedClient(req);
+    const { data: existingTask } = await userDb.from('provider_tasks')
+      .select('task_id').eq('provider', 'gemini').eq('task_id', saved.task_id).maybeSingle();
+    if (!existingTask) {
+      try {
+        await registerProviderTask(writer, 'gemini', saved.task_id, user.id);
+      } catch {
+        return res.status(503).json({ error: 'Task registration could not be recovered. Contact an administrator before retrying.' });
+      }
+    }
     return res.status(200).json({ taskId: saved.task_id });
   }
   if (saved.status !== 'pending' || metadata.geminiSubmissionStartedAt) {
@@ -114,18 +166,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    
-    // Prepare image if provided
-    let imageParam: Image | undefined = undefined;
-    if (referenceImages.length > 0 && referenceImages[0].data) {
-      const dataUri = await providerImageData(writer, referenceImages[0].data);
-      const base64Data = dataUri.includes(',') ? dataUri.split(',')[1] : dataUri;
-      const mimeType = referenceImages[0].mimeType || (dataUri.startsWith('data:') ? dataUri.slice(5, dataUri.indexOf(';')) : 'image/jpeg');
-      imageParam = {
-        imageBytes: base64Data,
-        mimeType,
-      };
-    }
 
     const trimmedPrompt = prompt.trim();
     const source: GenerateVideosParameters['source'] = {
@@ -144,21 +184,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     const operation = await ai.models.generateVideos(genParams);
-    const taskId = operation.name;
+    const taskId = operation?.name;
 
     if (!taskId) {
+      // Operation did not start; release the claim so retry does not get 409
+      const resetMetadata = { ...galleryClaim.metadata };
+      delete resetMetadata.geminiSubmissionStartedAt;
+      await writer.from('generations')
+        .update({ status: 'pending', metadata: resetMetadata })
+        .eq('id', galleryClaim.id);
       return res.status(502).json({ error: 'Gemini did not return an operation name.' });
     }
 
-    try {
-      await registerProviderTask(writer, 'gemini', taskId, user.id);
-    } catch (regError: any) {
-      // Keep status 'processing' for admin reconciliation, but attach taskId and error to metadata
+    let registered = false;
+    let lastRegError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await registerProviderTask(writer, 'gemini', taskId, user.id);
+        registered = true;
+        break;
+      } catch (err: any) {
+        lastRegError = err;
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 200 * (attempt + 1)));
+        }
+      }
+    }
+
+    if (!registered) {
+      // Record taskId in generation for future recovery/admin, but do not hand out unusable taskId in 503 response
       const { error: updateErr } = await writer.from('generations')
-        .update({ task_id: taskId, status: 'processing', metadata: { ...galleryClaim.metadata, error: regError.message } })
+        .update({ task_id: taskId, status: 'processing', metadata: { ...galleryClaim.metadata, error: lastRegError?.message } })
         .eq('id', galleryClaim.id);
       if (updateErr) console.error('Failed to update generation with taskId on regError:', { generationId: galleryClaim.id, taskId, error: updateErr.message });
-      return res.status(503).json({ error: regError.message, taskId });
+      return res.status(503).json({ error: lastRegError?.message || 'Task registration failed.' });
     }
 
     const { error: updateErr } = await writer.from('generations').update({ task_id: taskId }).eq('id', galleryClaim.id);
@@ -174,6 +233,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         metadata: { ...galleryClaim.metadata, error: error?.message || 'Gemini video generation was rejected.' }
       }).eq('id', galleryClaim.id);
       if (updateErr) console.error('Failed to update generation status to failed:', { generationId: galleryClaim.id, error: updateErr.message });
+    } else {
+      // 5xx or network error before an operation was established: release claim so user can retry
+      const resetMetadata = { ...galleryClaim.metadata };
+      delete resetMetadata.geminiSubmissionStartedAt;
+      const { error: resetErr } = await writer.from('generations').update({
+        status: 'pending',
+        metadata: resetMetadata
+      }).eq('id', galleryClaim.id);
+      if (resetErr) console.error('Failed to release generation claim on 5xx/network error:', { generationId: galleryClaim.id, error: resetErr.message });
     }
     return res.status(errorStatus).json({ error: error?.message || 'Gemini video generation failed to start.' });
   }
