@@ -39,3 +39,4 @@ test('compileCinematicPrompt ignores Auto settings', () => {
 
   assert.equal(result, 'Space station orbit');
 });
+

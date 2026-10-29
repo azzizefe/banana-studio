@@ -59,3 +59,4 @@ export function compileCinematicPrompt(scene: PromptCompilerInput): string {
 
   return parts.join(', ');
 }
+
