@@ -1,5 +1,6 @@
 import { useProviderRoute, ProviderRouteControl } from './ProviderRoutingSettings';
 import { seedanceProviderError } from '../lib/video/seedanceProviders';
+import { getGeminiOmniConfigError, GEMINI_OMNI_SUPPORTED_ASPECT_RATIOS, GEMINI_OMNI_SUPPORTED_QUALITIES, GEMINI_OMNI_SUPPORTED_DURATIONS } from '../lib/video/geminiOmni';
 import { SavedReferenceImages } from './SavedReferenceImages';
 import { getClipboardImages } from '../lib/references/clipboardImages';
 import { displayReferencePrompt, storeReferencePrompt } from '../lib/references/dynamicReferences';
@@ -626,14 +627,18 @@ export const Controls: React.FC<ControlsProps> = ({
 
   const updateVideoModel = (videoModel: VideoModelId) => {
     const isH3 = videoModel === 'minimax-h3';
+    const isGemini = videoModel === 'gemini-omni-1.1-flash';
     const isH3MaxQuality = config.videoQuality === '480p' || config.videoQuality === '768p';
     const isSeedanceQuality = config.videoQuality === '480p' || config.videoQuality === '720p' || config.videoQuality === '1080p';
+    const isGeminiQuality = GEMINI_OMNI_SUPPORTED_QUALITIES.includes(config.videoQuality);
     const targetH3Duration = h3State.capabilities.duration;
     const normalizedDuration = config.videoDuration === -1 || !Number.isFinite(config.videoDuration)
       ? targetH3Duration?.default || 5
       : isH3
         ? Math.max(targetH3Duration?.min || .92, Math.min(targetH3Duration?.max || 15, config.videoDuration))
-        : Math.max(4, Math.min(videoModel === 'seedance-2.5' ? 30 : 15, Math.round(config.videoDuration)));
+        : isGemini
+          ? (GEMINI_OMNI_SUPPORTED_DURATIONS.includes(config.videoDuration) ? config.videoDuration : 5)
+          : Math.max(4, Math.min(videoModel === 'seedance-2.5' ? 30 : 15, Math.round(config.videoDuration)));
     const nextOperation: VideoOperation = videoModel === 'seedance-2.5'
       ? config.videoOperation === 'reference_edit'
         ? 'edit'
@@ -650,10 +655,14 @@ export const Controls: React.FC<ControlsProps> = ({
       videoDuration: videoModel === 'seedance-2.5' && (nextOperation === 'edit' || config.videoDuration === -1) ? -1 : normalizedDuration,
       videoQuality: isH3
         ? isH3MaxQuality ? config.videoQuality : '768p'
-        : isSeedanceQuality ? config.videoQuality : '720p',
+        : isGemini
+          ? isGeminiQuality ? config.videoQuality : '720p'
+          : isSeedanceQuality ? config.videoQuality : '720p',
       videoAspectRatio: isH3
         ? config.referenceImages.length > 0 ? 'adaptive' : config.videoAspectRatio === 'adaptive' ? '16:9' : config.videoAspectRatio
-        : config.videoAspectRatio,
+        : isGemini
+          ? (GEMINI_OMNI_SUPPORTED_ASPECT_RATIOS.includes(config.videoAspectRatio) ? config.videoAspectRatio : '16:9')
+          : config.videoAspectRatio,
       audioEnabled: isH3 ? true : config.audioEnabled,
       videoPromptExpansionMode: isH3 ? config.h3MaxOptions?.promptExpansionMode || 'balanced' : config.videoPromptExpansionMode,
     };
@@ -1818,9 +1827,11 @@ export const Controls: React.FC<ControlsProps> = ({
     ? [{ label: 'Source frame', value: 'adaptive' }]
     : selectedVideoModel === 'minimax-h3'
       ? h3State.capabilities.aspectRatios.map(value => ({ label: value === 'adaptive' || value === 'auto' ? 'Source / adaptive' : value, value: value === 'auto' ? 'adaptive' : value }))
-      : selectedVideoOperation === 'generate' || selectedVideoOperation === 'reference_edit'
-        ? VIDEO_ASPECT_RATIO_OPTIONS.filter(o => providerRoute.provider !== 'openrouter' || o.value !== 'adaptive').map(o => ({ label: o.label, value: o.value }))
-        : [{ label: 'Source', value: 'adaptive' }];
+      : selectedVideoModel === 'gemini-omni-1.1-flash'
+        ? VIDEO_ASPECT_RATIO_OPTIONS.filter(o => GEMINI_OMNI_SUPPORTED_ASPECT_RATIOS.includes(o.value as VideoAspectRatio)).map(o => ({ label: o.label, value: o.value }))
+        : selectedVideoOperation === 'generate' || selectedVideoOperation === 'reference_edit'
+          ? VIDEO_ASPECT_RATIO_OPTIONS.filter(o => providerRoute.provider !== 'openrouter' || o.value !== 'adaptive').map(o => ({ label: o.label, value: o.value }))
+          : [{ label: 'Source', value: 'adaptive' }];
   const videoQualityOptions = selectedVideoModel === 'minimax-h3'
     ? h3State.capabilities.resolutions.map(value => ({ label: value, value: value.toLowerCase() === '2k' ? '2K' : value.toLowerCase() }))
     : selectedVideoModel === 'gemini-omni-1.1-flash'
@@ -1860,7 +1871,17 @@ export const Controls: React.FC<ControlsProps> = ({
   const requiresSourceVideo = isVideoMode && selectedVideoModel !== 'minimax-h3' && selectedVideoOperation !== 'generate';
   const h3InputError = isH3VideoConfig ? getH3MaxInputError(config) : null;
   const isSunburst = config.imageModel === SUNBURST_MODEL;
-  const routeInputError = providerRoute.error || (config.mode === 'video' && selectedVideoModel !== 'minimax-h3' && providerRoute.provider ? seedanceProviderError(providerRoute.provider, { videoModel: selectedVideoModel, mode: selectedVideoOperation === 'edit' ? 'video_edit' : selectedVideoOperation === 'extend' ? 'video_extend' : hasSeedanceFrameRoles ? 'image_to_video' : config.referenceImages.length || currentReferenceVideos.length || currentReferenceAudios.length ? 'reference_to_video' : 'text_to_video', duration: selectedVideoOperation === 'edit' ? -1 : config.videoDuration, quality: config.videoQuality, aspectRatio: config.videoAspectRatio, imageUrls: config.referenceImages.map(() => ''), videoUrls: currentReferenceVideos.map(() => ''), audioUrls: currentReferenceAudios.map(() => ''), referenceEditMode: selectedVideoOperation === 'reference_edit' }) : undefined);
+  const routeInputError = providerRoute.error || (
+    config.mode === 'video'
+      ? selectedVideoModel === 'minimax-h3'
+        ? undefined
+        : selectedVideoModel === 'gemini-omni-1.1-flash'
+          ? getGeminiOmniConfigError(config.prompt, config.referenceImages, config.referenceVideos, config.videoAspectRatio, config.videoQuality, config.videoDuration)
+          : providerRoute.provider
+            ? seedanceProviderError(providerRoute.provider, { videoModel: selectedVideoModel, mode: selectedVideoOperation === 'edit' ? 'video_edit' : selectedVideoOperation === 'extend' ? 'video_extend' : hasSeedanceFrameRoles ? 'image_to_video' : config.referenceImages.length || currentReferenceVideos.length || currentReferenceAudios.length ? 'reference_to_video' : 'text_to_video', duration: selectedVideoOperation === 'edit' ? -1 : config.videoDuration, quality: config.videoQuality, aspectRatio: config.videoAspectRatio, imageUrls: config.referenceImages.map(() => ''), videoUrls: currentReferenceVideos.map(() => ''), audioUrls: currentReferenceAudios.map(() => ''), referenceEditMode: selectedVideoOperation === 'reference_edit' })
+            : undefined
+      : undefined
+  );
   const canGenerate = !routeInputError && !isDraftLoading && (isVideoMode
     ? uploadingReferenceVideos === 0 && !hasStaleEnhancedPrompt && (isH3VideoConfig ? !h3InputError : config.prompt.trim().length > 0 && (!requiresSourceVideo || (config.referenceVideos?.length || 0) > 0))
     : !isBrainstormActive && !sunburstError && !hasStaleEnhancedPrompt && (config.prompt.trim().length > 0 || (!isSunburst && config.referenceImages.length > 0)));

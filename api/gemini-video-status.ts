@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI, GenerateVideosOperation } from '@google/genai';
-import { applyCors, requireUser } from './_lib/auth.js';
+import { applyCors, requireUser, createUserScopedClient } from './_lib/auth.js';
 import { requireProviderTask } from './_lib/providerTasks.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -42,11 +42,56 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const generatedVideos = operation.response?.generatedVideos || [];
     const videoUrls: string[] = [];
 
-    for (const item of generatedVideos) {
+    const db = createUserScopedClient(req);
+    const bucket = db.storage.from('media');
+    const safeTaskId = taskId.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    for (let i = 0; i < generatedVideos.length; i++) {
+      const item = generatedVideos[i];
+      const storagePath = `${user.id}/gemini-video/${safeTaskId}${generatedVideos.length > 1 ? `_${i}` : ''}.mp4`;
+
+      // Check if already stored
+      const existing = await bucket.createSignedUrl(storagePath, 86400);
+      if (!existing.error && existing.data?.signedUrl) {
+        videoUrls.push(existing.data.signedUrl);
+        continue;
+      }
+
+      let buffer: Buffer | null = null;
+      if (item.video?.videoBytes) {
+        buffer = Buffer.from(item.video.videoBytes, 'base64');
+      } else if (item.video?.uri) {
+        // Download via URI using API key
+        const fetchUrl = new URL(item.video.uri);
+        if (!fetchUrl.searchParams.has('key')) {
+          fetchUrl.searchParams.set('key', apiKey);
+        }
+        const dlRes = await fetch(fetchUrl.toString(), {
+          headers: { 'x-goog-api-key': apiKey },
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (dlRes.ok) {
+          buffer = Buffer.from(await dlRes.arrayBuffer());
+        }
+      }
+
+      if (buffer && buffer.length > 0) {
+        const { error: uploadError } = await bucket.upload(storagePath, buffer, {
+          contentType: 'video/mp4',
+          upsert: true,
+        });
+        if (!uploadError) {
+          const signed = await bucket.createSignedUrl(storagePath, 86400);
+          if (signed.data?.signedUrl) {
+            videoUrls.push(signed.data.signedUrl);
+            continue;
+          }
+        }
+      }
+
+      // Fallback if upload fails:
       if (item.video?.uri) {
         videoUrls.push(item.video.uri);
-      } else if (item.video?.videoBytes) {
-        videoUrls.push(`data:video/mp4;base64,${item.video.videoBytes}`);
       }
     }
 

@@ -880,15 +880,26 @@ const createGeminiOmniVideoTask = async (
     ...(context?.id ? { generationId: context.id } : {}),
   };
 
-  const response = await fetch('/api/gemini-video', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
+  let response;
+  try {
+    response = await fetch('/api/gemini-video', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new RecoverableVideoTaskError('Gemini did not confirm whether the video was accepted. Do not submit again; check task history and usage first.');
+  }
 
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result?.taskId) {
+  if (!response.ok && !result?.taskId) {
+    if (response.status >= 500 || !result) {
+      throw new RecoverableVideoTaskError(result?.error || 'Gemini acceptance could not be confirmed. Check task history and usage before submitting again.');
+    }
     throw new Error(result?.error || 'Failed to start Gemini Omni generation.');
+  }
+  if (!result?.taskId) {
+    throw new RecoverableVideoTaskError('Gemini did not confirm a task ID. Check task history before submitting again.');
   }
 
   return {

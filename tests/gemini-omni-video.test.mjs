@@ -5,19 +5,16 @@ import { getGeminiOmniConfigError, GEMINI_OMNI_SUPPORTED_ASPECT_RATIOS, GEMINI_O
 import { estimateVideoCost } from '../src/types.ts';
 
 test('gemini-omni-1.1-flash routes and provider resolution', () => {
-  assert.deepEqual(MODEL_ROUTES['gemini-omni-1.1-flash'], ['gemini', 'openrouter']);
-  assert.equal(OPENROUTER_MODELS['gemini-omni-1.1-flash'], 'google/gemini-omni-1.1-flash');
+  assert.deepEqual(MODEL_ROUTES['gemini-omni-1.1-flash'], ['gemini']);
+  assert.equal(OPENROUTER_MODELS['gemini-omni-1.1-flash'], undefined);
 
   // Provider resolution with Gemini key
   assert.equal(resolveProvider('gemini-omni-1.1-flash', 'auto', { gemini: true }), 'gemini');
   assert.equal(resolveProvider('gemini-omni-1.1-flash', 'gemini', { gemini: true }), 'gemini');
 
-  // Fallback to OpenRouter if Gemini not available
-  assert.equal(resolveProvider('gemini-omni-1.1-flash', 'auto', { openrouter: true }), 'openrouter');
-  assert.equal(resolveProvider('gemini-omni-1.1-flash', 'openrouter', { openrouter: true }), 'openrouter');
-
-  // Throws if neither key available
+  // Throws if Gemini key not available
   assert.throws(() => resolveProvider('gemini-omni-1.1-flash', 'auto', {}), /Add one key/);
+  assert.throws(() => resolveProvider('gemini-omni-1.1-flash', 'openrouter', { openrouter: true }), /This provider does not serve the selected model/);
   assert.throws(() => resolveProvider('gemini-omni-1.1-flash', 'fal', { fal: true }));
 });
 
