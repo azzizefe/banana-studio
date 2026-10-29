@@ -1423,38 +1423,7 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
       <div className="flex-1 overflow-y-auto px-8 pt-9 pb-16 flex flex-col gap-8" ref={popoverRef}>
         
         {/* HIGGSFIELD DIRECTOR INPUT CONSOLE */}
-        <div className="max-w-5xl mx-auto w-full flex items-start gap-4">
-          
-          {/* Vertical Mode Pill (Left) */}
-          <div className="flex flex-col bg-[#161a23] border border-white/10 rounded-2xl p-1.5 gap-1.5 shadow-xl shrink-0">
-            <button
-              type="button"
-              onClick={() => setMode('image')}
-              className={`flex flex-col items-center justify-center w-12 h-14 rounded-xl text-[11px] font-medium transition-all ${
-                mode === 'image'
-                  ? 'bg-white/15 text-white shadow-inner'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <ImageIcon size={18} className="mb-0.5" />
-              <span>Image</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('video')}
-              className={`flex flex-col items-center justify-center w-12 h-14 rounded-xl text-[11px] font-medium transition-all ${
-                mode === 'video'
-                  ? 'bg-lime-400 text-black font-semibold shadow-lg shadow-lime-400/20'
-                  : 'text-gray-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Video size={18} className="mb-0.5" />
-              <span>Video</span>
-            </button>
-          </div>
-
-          {/* Main Director Control Deck */}
-          <div className="flex-1 flex flex-col gap-3 relative">
+        <div className="max-w-5xl mx-auto w-full flex flex-col gap-3 relative">
             
             {/* Top Row: Module Director Capsules */}
             <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
@@ -2684,7 +2653,6 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
                 </div>
               )}
             </div>
-          </div>
         </div>
 
         {/* =========================================================================
