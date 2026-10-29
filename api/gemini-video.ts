@@ -61,10 +61,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!Array.isArray(body.referenceImages)) {
       return res.status(400).json({ error: 'referenceImages must be an array' });
     }
-    if (body.referenceImages.length > 0) {
-      const first = body.referenceImages[0];
-      if (!first || typeof first !== 'object' || Array.isArray(first) || (first.data !== undefined && typeof first.data !== 'string')) {
-        return res.status(400).json({ error: 'Invalid reference image data' });
+    for (const img of body.referenceImages) {
+      if (!img || typeof img !== 'object' || Array.isArray(img) || typeof img.data !== 'string' || !img.data.trim()) {
+        return res.status(400).json({ error: 'Invalid reference image data: each item must be an object with a non-empty data string' });
       }
     }
   }

@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI, GenerateVideosOperation } from '@google/genai';
 import { applyCors, requireUser, createUserScopedClient } from './_lib/auth.js';
-import { requireProviderTask } from './_lib/providerTasks.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   applyCors(res);
@@ -16,8 +15,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY not configured on server' });
 
   const taskId = req.query.taskId as string;
-  if (!taskId) return res.status(400).json({ error: 'taskId is required' });
-  if (!await requireProviderTask(req, res, 'gemini', taskId)) return;
+  if (!taskId || typeof taskId !== 'string' || taskId.length > 200) {
+    return res.status(400).json({ error: 'A valid task ID is required' });
+  }
+
+  const db = createUserScopedClient(req);
+
+  // Verify task ownership: check provider_tasks first, fall back to user's saved generation
+  const { data: providerTask, error: ptError } = await db.from('provider_tasks')
+    .select('task_id').eq('provider', 'gemini').eq('task_id', taskId).maybeSingle();
+
+  if (ptError) {
+    return res.status(503).json({ error: 'Task access could not be verified. Try again shortly.' });
+  }
+
+  if (!providerTask) {
+    const { data: savedGen, error: genError } = await db.from('generations')
+      .select('id').eq('task_id', taskId).eq('user_id', user.id).eq('type', 'video').maybeSingle();
+    if (genError) {
+      return res.status(503).json({ error: 'Task access could not be verified. Try again shortly.' });
+    }
+    if (!savedGen) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+  }
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -48,7 +69,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const videoUrls: string[] = [];
 
-    const db = createUserScopedClient(req);
     const bucket = db.storage.from('media');
     const safeTaskId = taskId.replace(/[^a-zA-Z0-9_-]/g, '_');
 
