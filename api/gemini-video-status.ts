@@ -61,38 +61,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (item.video?.videoBytes) {
         buffer = Buffer.from(item.video.videoBytes, 'base64');
       } else if (item.video?.uri) {
-        // Download via URI using API key
-        const fetchUrl = new URL(item.video.uri);
-        if (!fetchUrl.searchParams.has('key')) {
-          fetchUrl.searchParams.set('key', apiKey);
-        }
-        const dlRes = await fetch(fetchUrl.toString(), {
+        // Download via URI using header authentication only (do not expose key in URI)
+        const dlRes = await fetch(item.video.uri, {
           headers: { 'x-goog-api-key': apiKey },
+          redirect: 'error',
           signal: AbortSignal.timeout(60_000),
         });
-        if (dlRes.ok) {
-          buffer = Buffer.from(await dlRes.arrayBuffer());
+        if (!dlRes.ok) {
+          throw new Error('The generated video could not be downloaded from Gemini.');
         }
+        buffer = Buffer.from(await dlRes.arrayBuffer());
       }
 
-      if (buffer && buffer.length > 0) {
-        const { error: uploadError } = await bucket.upload(storagePath, buffer, {
-          contentType: 'video/mp4',
-          upsert: true,
-        });
-        if (!uploadError) {
-          const signed = await bucket.createSignedUrl(storagePath, 86400);
-          if (signed.data?.signedUrl) {
-            videoUrls.push(signed.data.signedUrl);
-            continue;
-          }
-        }
+      if (!buffer || buffer.length === 0) {
+        throw new Error('No video data received from Gemini.');
       }
 
-      // Fallback if upload fails:
-      if (item.video?.uri) {
-        videoUrls.push(item.video.uri);
+      const { error: uploadError } = await bucket.upload(storagePath, buffer, {
+        contentType: 'video/mp4',
+        upsert: true,
+      });
+      if (uploadError) {
+        throw new Error(`The generated video could not be saved to media storage: ${uploadError.message}`);
       }
+
+      const signed = await bucket.createSignedUrl(storagePath, 86400);
+      if (signed.error || !signed.data?.signedUrl) {
+        throw new Error('Access URL for the generated video could not be created.');
+      }
+      videoUrls.push(signed.data.signedUrl);
     }
 
     return res.status(200).json({
