@@ -163,6 +163,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!claimed) return res.status(409).json({ code: 'GENERATION_SUBMITTING', error: 'This saved video is already being submitted. Check the existing task instead of submitting again.' });
   const galleryClaim = { id: generationId, metadata: claimedMetadata };
 
+  let providerCallDispatched = false;
+
   try {
     const ai = new GoogleGenAI({ apiKey });
 
@@ -182,16 +184,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     };
 
+    providerCallDispatched = true;
     const operation = await ai.models.generateVideos(genParams);
     const taskId = operation?.name;
 
     if (!taskId) {
-      // Operation did not start; release the claim so retry does not get 409
-      const resetMetadata = { ...galleryClaim.metadata };
-      delete resetMetadata.geminiSubmissionStartedAt;
-      await writer.from('generations')
-        .update({ status: 'pending', metadata: resetMetadata })
+      // Operation was dispatched but no name returned; preserve processing status for admin reconciliation
+      const { error: updateErr } = await writer.from('generations')
+        .update({ metadata: { ...galleryClaim.metadata, error: 'Gemini did not return an operation name.' } })
         .eq('id', galleryClaim.id);
+      if (updateErr) console.error('Failed to update metadata on missing operation name:', updateErr.message);
       return res.status(502).json({ error: 'Gemini did not return an operation name.' });
     }
 
@@ -232,15 +234,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         metadata: { ...galleryClaim.metadata, error: error?.message || 'Gemini video generation was rejected.' }
       }).eq('id', galleryClaim.id);
       if (updateErr) console.error('Failed to update generation status to failed:', { generationId: galleryClaim.id, error: updateErr.message });
-    } else {
-      // 5xx or network error before an operation was established: release claim so user can retry
+    } else if (!providerCallDispatched) {
+      // Error occurred BEFORE dispatching to Gemini: safe to release claim
       const resetMetadata = { ...galleryClaim.metadata };
       delete resetMetadata.geminiSubmissionStartedAt;
       const { error: resetErr } = await writer.from('generations').update({
         status: 'pending',
         metadata: resetMetadata
       }).eq('id', galleryClaim.id);
-      if (resetErr) console.error('Failed to release generation claim on 5xx/network error:', { generationId: galleryClaim.id, error: resetErr.message });
+      if (resetErr) console.error('Failed to release generation claim before provider call:', { generationId: galleryClaim.id, error: resetErr.message });
+    } else {
+      // Provider call was dispatched but resulted in 5xx/network error: preserve processing claim & geminiSubmissionStartedAt for admin reconciliation
+      const { error: updateErr } = await writer.from('generations').update({
+        metadata: { ...galleryClaim.metadata, error: error?.message || 'Gemini video generation failed with uncertain outcome.' }
+      }).eq('id', galleryClaim.id);
+      if (updateErr) console.error('Failed to record uncertain outcome error:', { generationId: galleryClaim.id, error: updateErr.message });
     }
     return res.status(errorStatus).json({ error: error?.message || 'Gemini video generation failed to start.' });
   }
