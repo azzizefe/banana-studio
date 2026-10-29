@@ -45,11 +45,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Invalid JSON body' });
   }
 
-  if (body?.generationId !== undefined && (typeof body.generationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(body.generationId))) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return res.status(400).json({ error: 'Request body must be a JSON object' });
+  }
+
+  if (body.prompt !== undefined && typeof body.prompt !== 'string') {
+    return res.status(400).json({ error: 'Prompt must be a string' });
+  }
+
+  if (body.imageUrls !== undefined) {
+    if (!Array.isArray(body.imageUrls)) {
+      return res.status(400).json({ error: 'imageUrls must be an array' });
+    }
+    if (body.imageUrls.some((url: unknown) => !isReferenceUrl(url))) {
+      return res.status(400).json({ error: 'Invalid reference media.' });
+    }
+  }
+
+  if (body.referenceImages !== undefined) {
+    if (!Array.isArray(body.referenceImages)) {
+      return res.status(400).json({ error: 'referenceImages must be an array' });
+    }
+    if (body.referenceImages.length > 0) {
+      const first = body.referenceImages[0];
+      if (!first || typeof first !== 'object' || Array.isArray(first) || (first.data !== undefined && typeof first.data !== 'string')) {
+        return res.status(400).json({ error: 'Invalid reference image data' });
+      }
+    }
+  }
+
+  if (body.generationId !== undefined && (typeof body.generationId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,199}$/.test(body.generationId))) {
     return res.status(400).json({ error: 'A valid generation ID is required' });
   }
 
-  const { prompt = '', imageUrls = [], referenceImages = [], duration = 5, quality = '720p', aspectRatio = '16:9' } = body || {};
+  const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+  const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
+  const referenceImages = Array.isArray(body.referenceImages) ? body.referenceImages : [];
+  const duration = body.duration ?? 5;
+  const quality = body.quality ?? '720p';
+  const aspectRatio = body.aspectRatio ?? '16:9';
 
   // Server allowlist validation
   if (!ALLOWED_ASPECT_RATIOS.has(aspectRatio)) {
@@ -61,10 +95,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (!ALLOWED_QUALITIES.has(quality)) {
     return res.status(400).json({ error: `Invalid quality: ${quality}. Supported qualities are 720p and 1080p.` });
-  }
-
-  if (body?.imageUrls != null && (!Array.isArray(body.imageUrls) || body.imageUrls.some((url: unknown) => !isReferenceUrl(url)))) {
-    return res.status(400).json({ error: 'Invalid reference media.' });
   }
 
   // Idempotency and gallery claim check
