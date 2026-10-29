@@ -36,7 +36,14 @@ import {
   FolderKanban,
   Tag,
   ChevronLeft,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
+import { compileCinematicPrompt } from '../lib/cinema/promptCompiler';
+import { createVideoTask, pollVideoTask } from '../services/runwayService';
+import { generateMedia } from '../services/geminiService';
+import { VideoAspectRatio, VideoModelId, DEFAULT_VIDEO_MODEL, DEFAULT_IMAGE_MODEL, ImageModelId, GenerationConfig } from '../types';
 
 interface CinemaStudioProps {
   onBackToBananaStudio?: () => void;
@@ -60,6 +67,15 @@ export interface SceneItem {
   lighting: string;
   hasAudio: boolean;
   variations: number;
+  videoUrl?: string;
+  imageUrl?: string;
+  thumbnailUrl?: string;
+  status?: 'idle' | 'pending' | 'processing' | 'completed' | 'failed';
+  progress?: number;
+  error?: string;
+  taskId?: string;
+  modelUsed?: string;
+  generatedAt?: number;
 }
 
 export interface CinemaProject {
@@ -798,6 +814,7 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
   const [references, setReferences] = useState<string[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   // Sync prompt when active scene changes
   useEffect(() => {
@@ -1042,20 +1059,152 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
     return `${totalSeconds}s`;
   };
 
-  const handleGenerate = () => {
-    if (isGenerating) return;
+  const mapVideoAspectRatio = (ratioStr: string): VideoAspectRatio => {
+    if (ratioStr === '2.39:1' || ratioStr === '21:9') return '21:9';
+    if (ratioStr === '9:16') return '9:16';
+    if (ratioStr === '1:1') return '1:1';
+    if (ratioStr === '4:3') return '4:3';
+    if (ratioStr === '3:4') return '3:4';
+    return '16:9';
+  };
+
+  const handleGenerate = async () => {
+    if (isGenerating || activeScene.status === 'processing') return;
+
+    const compiledPrompt = compileCinematicPrompt(activeScene);
+    if (!compiledPrompt.trim()) {
+      setGenerationError('Lütfen sahne için bir prompt veya görsel açıklama yazın.');
+      return;
+    }
+
     setIsGenerating(true);
     setGenerationProgress(5);
-    const interval = setInterval(() => {
-      setGenerationProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsGenerating(false);
-          return 100;
+    setGenerationError(null);
+
+    const targetSceneId = activeScene.id;
+    updateActiveScene({
+      status: 'processing',
+      progress: 5,
+      error: undefined,
+      modelUsed: selectedModel.name,
+    });
+
+    try {
+      if (mode === 'video') {
+        const videoModelId = (selectedModel.id as VideoModelId) || DEFAULT_VIDEO_MODEL;
+        const requestedDuration = Math.min(30, Math.max(5, parseInt(activeScene.duration.replace(/\D/g, '')) || 5));
+        const requestedQuality = (activeScene.resolution === '1080p' ? '1080p' : '720p') as '720p' | '1080p';
+        const mappedRatio = mapVideoAspectRatio(activeScene.ratio);
+
+        const config: GenerationConfig = {
+          prompt: compiledPrompt,
+          mode: 'video',
+          videoModel: videoModelId,
+          videoAspectRatio: mappedRatio,
+          videoQuality: requestedQuality,
+          videoDuration: requestedDuration,
+          audioEnabled: activeScene.hasAudio,
+          referenceImages: [],
+          referenceVideos: [],
+          referenceAudios: [],
+          videoOperation: 'generate',
+          videoPromptExpansionMode: 'balanced',
+          count: 1,
+          aspectRatio: (mappedRatio === '21:9' || mappedRatio === 'adaptive' ? '16:9' : mappedRatio) as any,
+          resolution: '2K',
+          imageModel: DEFAULT_IMAGE_MODEL,
+        };
+
+        const sceneVideoId = `cinema-${activeProject.id}-s${targetSceneId}-${Date.now()}`;
+        const { taskId, endpoint, queueEndpoint } = await createVideoTask(config, { id: sceneVideoId });
+
+        updateActiveScene({
+          taskId,
+          progress: 15,
+        });
+        setGenerationProgress(15);
+
+        const videoResult = await pollVideoTask(
+          taskId,
+          (progressFraction) => {
+            const pct = Math.min(99, Math.max(15, Math.round(progressFraction * 100)));
+            setGenerationProgress(pct);
+            updateActiveScene({ progress: pct });
+          },
+          videoModelId,
+          endpoint,
+          queueEndpoint
+        );
+
+        if (videoResult.urls && videoResult.urls.length > 0) {
+          const videoUrl = videoResult.urls[0];
+          setGenerationProgress(100);
+          updateActiveScene({
+            videoUrl,
+            status: 'completed',
+            progress: 100,
+            generatedAt: Date.now(),
+          });
+        } else {
+          throw new Error('Video üretimi tamamlandı ancak URL alınamadı.');
         }
-        return prev + 15;
+      } else {
+        // Image Mode
+        const config: GenerationConfig = {
+          prompt: compiledPrompt,
+          mode: 'image',
+          imageModel: DEFAULT_IMAGE_MODEL,
+          videoModel: DEFAULT_VIDEO_MODEL,
+          videoAspectRatio: '16:9',
+          videoQuality: '720p',
+          videoDuration: 5,
+          audioEnabled: false,
+          referenceImages: [],
+          referenceVideos: [],
+          referenceAudios: [],
+          videoOperation: 'generate',
+          videoPromptExpansionMode: 'balanced',
+          count: 1,
+          aspectRatio: '16:9',
+          resolution: '2K',
+        };
+
+        const sceneImgId = `cinema-img-${activeProject.id}-s${targetSceneId}-${Date.now()}`;
+        const generated = await generateMedia(
+          config,
+          (progressFraction) => {
+            const pct = Math.min(99, Math.max(15, Math.round(progressFraction * 100)));
+            setGenerationProgress(pct);
+            updateActiveScene({ progress: pct });
+          },
+          undefined,
+          { id: sceneImgId }
+        );
+
+        if (generated && generated.url) {
+          setGenerationProgress(100);
+          updateActiveScene({
+            imageUrl: generated.url,
+            status: 'completed',
+            progress: 100,
+            generatedAt: Date.now(),
+          });
+        } else {
+          throw new Error('Görsel üretimi tamamlandı ancak URL alınamadı.');
+        }
+      }
+    } catch (err: any) {
+      console.error('Cinema Studio Generation Failed:', err);
+      const errMsg = err?.message || 'Üretim sırasında bir hata meydana geldi.';
+      setGenerationError(errMsg);
+      updateActiveScene({
+        status: 'failed',
+        error: errMsg,
+        progress: 0,
       });
-    }, 400);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Close popovers on click outside
@@ -2172,6 +2321,55 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
             {/* Central Unified Prompt Console */}
             <div className="flex flex-col bg-[#141822] border border-white/15 rounded-3xl p-4 shadow-2xl relative transition-all focus-within:border-lime-400/50">
               
+              {/* Generation Error Banner */}
+              {generationError && (
+                <div className="mb-3 flex items-center justify-between gap-2 p-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={15} className="shrink-0 text-red-400" />
+                    <span>{generationError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGenerationError(null)}
+                    className="p-1 text-red-400 hover:text-white rounded-lg hover:bg-white/10"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+
+              {/* Active Scene Video Screening Monitor (If already rendered) */}
+              {activeScene.videoUrl && (
+                <div className="mb-3 w-full rounded-2xl overflow-hidden border border-emerald-500/30 bg-black/60 relative group aspect-[2.39/1] max-h-72">
+                  <video
+                    src={activeScene.videoUrl}
+                    controls
+                    playsInline
+                    loop
+                    className="w-full h-full object-contain"
+                  />
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/80 backdrop-blur-md border border-emerald-500/40 px-2.5 py-1 rounded-full text-[11px] font-bold text-emerald-300 pointer-events-none">
+                    <CheckCircle2 size={13} className="text-emerald-400" />
+                    <span>{activeScene.title} — Hazır Oynatıcı</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Active Scene Image Monitor (If image rendered) */}
+              {!activeScene.videoUrl && activeScene.imageUrl && (
+                <div className="mb-3 w-full rounded-2xl overflow-hidden border border-emerald-500/30 bg-black/60 relative group aspect-[2.39/1] max-h-72 flex items-center justify-center">
+                  <img
+                    src={activeScene.imageUrl}
+                    alt={activeScene.title}
+                    className="w-full h-full object-contain"
+                  />
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5 bg-black/80 backdrop-blur-md border border-emerald-500/40 px-2.5 py-1 rounded-full text-[11px] font-bold text-emerald-300 pointer-events-none">
+                    <CheckCircle2 size={13} className="text-emerald-400" />
+                    <span>{activeScene.title} — Görsel Hazır</span>
+                  </div>
+                </div>
+              )}
+
               {/* Scene Indicator & Prompt Textarea */}
               <div className="flex items-center justify-between mb-1 text-[11px] text-gray-400">
                 <span className="flex items-center gap-1.5 font-semibold text-lime-400">
@@ -2565,13 +2763,62 @@ export const CinemaStudio: React.FC<CinemaStudioProps> = () => {
                   </div>
                 </div>
 
-                {/* Director Viewport Mock for Scene */}
-                <div className="w-full aspect-[2.39/1] rounded-xl bg-gradient-to-br from-[#1b2230] to-[#0c0f17] border border-white/10 flex flex-col items-center justify-center p-3 relative overflow-hidden group">
-                  <div className="absolute inset-0 pointer-events-none border border-white/5 grid grid-cols-3 grid-rows-3 opacity-20" />
-                  <Clapperboard size={22} className="text-gray-500 mb-1 group-hover:text-lime-400 transition-colors" />
-                  <p className="text-[11px] text-gray-300 line-clamp-2 text-center max-w-sm px-2">
-                    {scene.prompt}
-                  </p>
+                {/* Director Viewport for Scene */}
+                <div className="w-full aspect-[2.39/1] rounded-xl bg-gradient-to-br from-[#1b2230] to-[#0c0f17] border border-white/10 flex flex-col items-center justify-center relative overflow-hidden group">
+                  {scene.status === 'processing' ? (
+                    <div className="flex flex-col items-center justify-center p-4 gap-2 z-10 w-full h-full bg-black/75">
+                      <Loader2 size={24} className="text-lime-400 animate-spin" />
+                      <span className="text-xs font-semibold text-lime-300">
+                        Sahne Oluşturuluyor... %{scene.progress || generationProgress || 5}
+                      </span>
+                      <div className="w-3/4 max-w-xs bg-white/10 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className="bg-lime-400 h-full transition-all duration-300"
+                          style={{ width: `${scene.progress || generationProgress || 5}%` }}
+                        />
+                      </div>
+                    </div>
+                  ) : scene.videoUrl ? (
+                    <div className="relative w-full h-full">
+                      <video
+                        src={scene.videoUrl}
+                        controls
+                        playsInline
+                        loop
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-black/70 backdrop-blur-sm border border-emerald-500/40 px-2 py-0.5 rounded-full text-[10px] font-bold text-emerald-300 shadow">
+                        <CheckCircle2 size={11} />
+                        <span>RENDERED</span>
+                      </div>
+                    </div>
+                  ) : scene.imageUrl ? (
+                    <div className="relative w-full h-full">
+                      <img
+                        src={scene.imageUrl}
+                        alt={scene.title}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2 left-2 z-10 flex items-center gap-1 bg-black/70 backdrop-blur-sm border border-emerald-500/40 px-2 py-0.5 rounded-full text-[10px] font-bold text-emerald-300 shadow">
+                        <CheckCircle2 size={11} />
+                        <span>IMAGE READY</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center p-3 relative w-full h-full">
+                      <div className="absolute inset-0 pointer-events-none border border-white/5 grid grid-cols-3 grid-rows-3 opacity-20" />
+                      <Clapperboard size={22} className="text-gray-500 mb-1 group-hover:text-lime-400 transition-colors" />
+                      <p className="text-[11px] text-gray-300 line-clamp-2 text-center max-w-sm px-2">
+                        {scene.prompt}
+                      </p>
+                      {scene.status === 'failed' && (
+                        <div className="mt-2 flex items-center gap-1 text-[10px] text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-md">
+                          <AlertCircle size={11} />
+                          <span className="truncate max-w-[200px]">{scene.error || 'Hata'}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Scene Badges */}
