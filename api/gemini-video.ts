@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI, type GenerateVideosParameters, type Image } from '@google/genai';
 import { applyCors, requireUser } from './_lib/auth.js';
 import { prepareTaskRegistry, registerProviderTask, requireProviderTask } from './_lib/providerTasks.js';
-import { isReferenceUrl, providerImageData } from './_lib/providerMedia.js';
+import { providerImageData } from './_lib/providerMedia.js';
 
 interface GeminiVideoRequest {
   generationId?: string;
@@ -57,8 +57,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!Array.isArray(body.imageUrls)) {
       return res.status(400).json({ error: 'imageUrls must be an array' });
     }
-    if (body.imageUrls.some((url: unknown) => !isReferenceUrl(url))) {
-      return res.status(400).json({ error: 'Invalid reference media.' });
+    // Gemini only accepts inline image bytes; references must come through referenceImages.
+    if (body.imageUrls.length > 0) {
+      return res.status(400).json({ error: 'imageUrls is not supported for Gemini video. Send the reference image in referenceImages instead.' });
     }
   }
 
@@ -79,7 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const prompt = typeof body.prompt === 'string' ? body.prompt : '';
-  const imageUrls = Array.isArray(body.imageUrls) ? body.imageUrls : [];
   const referenceImages = Array.isArray(body.referenceImages) ? body.referenceImages : [];
   const duration = body.duration ?? 5;
   const quality = body.quality ?? '720p';
