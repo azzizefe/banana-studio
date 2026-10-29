@@ -7,7 +7,7 @@ import { providerImageData } from './_lib/providerMedia.js';
 interface GeminiVideoRequest {
   generationId?: string;
   prompt?: string;
-  imageUrls?: string[];
+  imageUrls?: unknown;
   referenceImages?: { data: string; mimeType?: string }[];
   duration?: number;
   quality?: string;
@@ -54,13 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (body.imageUrls !== undefined) {
-    if (!Array.isArray(body.imageUrls)) {
-      return res.status(400).json({ error: 'imageUrls must be an array' });
-    }
-    // Gemini only accepts inline image bytes; references must come through referenceImages.
-    if (body.imageUrls.length > 0) {
-      return res.status(400).json({ error: 'imageUrls is not supported for Gemini video. Send the reference image in referenceImages instead.' });
-    }
+    return res.status(400).json({ error: 'imageUrls is not supported for Gemini video. Send reference images in referenceImages instead.' });
   }
 
   if (body.referenceImages !== undefined) {
