@@ -1860,6 +1860,27 @@ export const Controls: React.FC<ControlsProps> = ({
   }, [config.mode, config.h3MaxMode, config.h3MaxOptions, config.referenceImages, config.referenceAudios?.length, config.videoAspectRatio, config.videoQuality, config.videoDuration, selectedVideoModel, onChange]);
 
   useEffect(() => {
+    const usesGemini = config.mode === 'video' && selectedVideoModel === 'gemini-omni-1.1-flash';
+    if (!usesGemini) return;
+    const isQualityValid = GEMINI_OMNI_SUPPORTED_QUALITIES.includes(config.videoQuality);
+    const isDurationValid = GEMINI_OMNI_SUPPORTED_DURATIONS.includes(config.videoDuration);
+    const isRatioValid = GEMINI_OMNI_SUPPORTED_ASPECT_RATIOS.includes(config.videoAspectRatio);
+    const isOpValid = !config.videoOperation || config.videoOperation === 'generate';
+    if (!isQualityValid || !isDurationValid || !isRatioValid || !isOpValid) {
+      onChange(current => {
+        if (current.mode !== 'video' || current.videoModel !== 'gemini-omni-1.1-flash') return current;
+        return {
+          ...current,
+          videoQuality: GEMINI_OMNI_SUPPORTED_QUALITIES.includes(current.videoQuality) ? current.videoQuality : '720p',
+          videoDuration: GEMINI_OMNI_SUPPORTED_DURATIONS.includes(current.videoDuration) ? current.videoDuration : 5,
+          videoAspectRatio: GEMINI_OMNI_SUPPORTED_ASPECT_RATIOS.includes(current.videoAspectRatio) ? current.videoAspectRatio : '16:9',
+          videoOperation: 'generate',
+        };
+      });
+    }
+  }, [config.mode, selectedVideoModel, config.videoQuality, config.videoDuration, config.videoAspectRatio, config.videoOperation, onChange]);
+
+  useEffect(() => {
     // Seedance 2.5's image-to-video endpoint derives framing from its input
     // images. Do not persist a fixed ratio the provider cannot honor. Video
     // Continue keeps fixed ratios because they control last-frame adaptation.
