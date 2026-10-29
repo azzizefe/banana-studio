@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { GoogleGenAI } from '@google/genai';
 import { applyCors, requireUser } from './_lib/auth.js';
 import { prepareTaskRegistry, registerProviderTask } from './_lib/providerTasks.js';
+import { isReferenceUrl } from './_lib/providerMedia.js';
 
 interface GeminiVideoRequest {
   prompt?: string;
@@ -40,6 +41,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { prompt = '', imageUrls = [], referenceImages = [], duration = 5, aspectRatio = '16:9' } = body || {};
+
+  if (body?.imageUrls != null && (!Array.isArray(body.imageUrls) || body.imageUrls.some((url: unknown) => !isReferenceUrl(url)))) {
+    return res.status(400).json({ error: 'Invalid reference media.' });
+  }
 
   try {
     const ai = new GoogleGenAI({ apiKey });
