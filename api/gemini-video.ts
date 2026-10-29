@@ -156,7 +156,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!taskId) {
       if (galleryClaim) {
-        await writer.from('generations').update({ status: 'failed', metadata: { ...galleryClaim.metadata, error: 'Gemini did not return an operation name.' } }).eq('id', galleryClaim.id);
+        const { error: updateErr } = await writer.from('generations').update({ status: 'failed', metadata: { ...galleryClaim.metadata, error: 'Gemini did not return an operation name.' } }).eq('id', galleryClaim.id);
+        if (updateErr) console.error('Failed to update generation status to failed:', { generationId: galleryClaim.id, error: updateErr.message });
       }
       return res.status(502).json({ error: 'Gemini did not return an operation name.' });
     }
@@ -165,19 +166,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await registerProviderTask(writer, 'gemini', taskId, user.id);
     } catch (regError: any) {
       if (galleryClaim) {
-        await writer.from('generations').update({ status: 'failed', task_id: taskId, metadata: { ...galleryClaim.metadata, error: regError.message } }).eq('id', galleryClaim.id);
+        const { error: updateErr } = await writer.from('generations').update({ status: 'failed', task_id: taskId, metadata: { ...galleryClaim.metadata, error: regError.message } }).eq('id', galleryClaim.id);
+        if (updateErr) console.error('Failed to update generation status to failed with taskId:', { generationId: galleryClaim.id, taskId, error: updateErr.message });
       }
       return res.status(503).json({ error: regError.message, taskId });
     }
 
     if (galleryClaim) {
-      await writer.from('generations').update({ task_id: taskId }).eq('id', galleryClaim.id);
+      const { error: updateErr } = await writer.from('generations').update({ task_id: taskId }).eq('id', galleryClaim.id);
+      if (updateErr) console.error('Failed to update generation taskId:', { generationId: galleryClaim.id, taskId, error: updateErr.message });
     }
 
     return res.status(200).json({ taskId });
   } catch (error: any) {
     if (galleryClaim) {
-      await writer.from('generations').update({ status: 'failed', metadata: { ...galleryClaim.metadata, error: error?.message || 'Gemini video generation failed to start.' } }).eq('id', galleryClaim.id);
+      const { error: updateErr } = await writer.from('generations').update({ status: 'failed', metadata: { ...galleryClaim.metadata, error: error?.message || 'Gemini video generation failed to start.' } }).eq('id', galleryClaim.id);
+      if (updateErr) console.error('Failed to update generation status to failed:', { generationId: galleryClaim.id, error: updateErr.message });
     }
     return res.status(error?.status || 500).json({ error: error?.message || 'Gemini video generation failed to start.' });
   }

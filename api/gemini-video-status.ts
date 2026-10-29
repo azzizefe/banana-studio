@@ -56,60 +56,102 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const item = generatedVideos[i];
       const storagePath = `${user.id}/gemini-video/${safeTaskId}${generatedVideos.length > 1 ? `_${i}` : ''}.mp4`;
 
-      try {
-        // Check if already stored
-        const existing = await bucket.createSignedUrl(storagePath, 86400);
-        if (!existing.error && existing.data?.signedUrl) {
-          videoUrls.push(existing.data.signedUrl);
-          continue;
+      // Check if already stored
+      const existing = await bucket.createSignedUrl(storagePath, 86400);
+      if (!existing.error && existing.data?.signedUrl) {
+        videoUrls.push(existing.data.signedUrl);
+        continue;
+      }
+
+      let buffer: Buffer | null = null;
+      if (item.video?.videoBytes) {
+        buffer = Buffer.from(item.video.videoBytes, 'base64');
+      } else if (item.video?.uri) {
+        let fetchUrl: URL;
+        try {
+          fetchUrl = new URL(item.video.uri);
+        } catch {
+          return res.status(200).json({
+            status: 'failed',
+            error: 'Invalid video download URL received from Gemini.',
+          });
         }
 
-        let buffer: Buffer | null = null;
-        if (item.video?.videoBytes) {
-          buffer = Buffer.from(item.video.videoBytes, 'base64');
-        } else if (item.video?.uri) {
-          // Validate protocol and host against SSRF: only HTTPS Google Gemini Files endpoint is allowed
-          const fetchUrl = new URL(item.video.uri);
-          if (fetchUrl.protocol !== 'https:' || fetchUrl.hostname !== 'generativelanguage.googleapis.com') {
-            throw new Error('Invalid or unauthorized video download URL from Gemini.');
-          }
+        if (fetchUrl.protocol !== 'https:' || fetchUrl.hostname !== 'generativelanguage.googleapis.com') {
+          return res.status(200).json({
+            status: 'failed',
+            error: 'Unauthorized video download URL received from Gemini.',
+          });
+        }
 
-          // Download via URI using header authentication only (do not expose key in URI)
-          const dlRes = await fetch(fetchUrl.toString(), {
+        let dlRes: Response;
+        try {
+          dlRes = await fetch(fetchUrl.toString(), {
             headers: { 'x-goog-api-key': apiKey },
             redirect: 'error',
             signal: AbortSignal.timeout(60_000),
           });
-          if (!dlRes.ok) {
-            throw new Error(`The generated video could not be downloaded from Gemini (status ${dlRes.status}).`);
+        } catch (netErr: any) {
+          console.error('Gemini video download network error:', { taskId, index: i, error: netErr?.message || netErr });
+          return res.status(503).json({
+            error: 'Gemini video download failed temporarily. Try again shortly.',
+            retryable: true,
+          });
+        }
+
+        if (!dlRes.ok) {
+          if (dlRes.status >= 400 && dlRes.status < 500) {
+            return res.status(200).json({
+              status: 'failed',
+              error: `Gemini video download was rejected with HTTP ${dlRes.status}.`,
+            });
           }
+          console.error('Gemini video download server error:', { taskId, index: i, status: dlRes.status });
+          return res.status(503).json({
+            error: `Gemini video download failed with status ${dlRes.status}. Try again shortly.`,
+            retryable: true,
+          });
+        }
+
+        try {
           buffer = Buffer.from(await dlRes.arrayBuffer());
+        } catch (bufErr: any) {
+          console.error('Failed to read video arrayBuffer:', { taskId, index: i, error: bufErr?.message || bufErr });
+          return res.status(503).json({
+            error: 'Failed to read video data. Try again shortly.',
+            retryable: true,
+          });
         }
+      }
 
-        if (!buffer || buffer.length === 0) {
-          throw new Error('No video data received from Gemini.');
-        }
-
-        const { error: uploadError } = await bucket.upload(storagePath, buffer, {
-          contentType: 'video/mp4',
-          upsert: true,
+      if (!buffer || buffer.length === 0) {
+        return res.status(200).json({
+          status: 'failed',
+          error: 'No video data received from Gemini.',
         });
-        if (uploadError) {
-          throw new Error(`The generated video could not be saved to media storage: ${uploadError.message}`);
-        }
+      }
 
-        const signed = await bucket.createSignedUrl(storagePath, 86400);
-        if (signed.error || !signed.data?.signedUrl) {
-          throw new Error('Access URL for the generated video could not be created.');
-        }
-        videoUrls.push(signed.data.signedUrl);
-      } catch (storageErr: any) {
-        console.error('Gemini video storage failed:', { taskId, index: i, error: storageErr?.message || storageErr });
+      const { error: uploadError } = await bucket.upload(storagePath, buffer, {
+        contentType: 'video/mp4',
+        upsert: true,
+      });
+      if (uploadError) {
+        console.error('Gemini video storage upload failed:', { taskId, index: i, error: uploadError.message });
         return res.status(503).json({
-          error: 'Gemini video is ready but could not be stored in media bucket. Try again shortly.',
+          error: `The generated video could not be saved to media storage: ${uploadError.message}`,
           retryable: true,
         });
       }
+
+      const signed = await bucket.createSignedUrl(storagePath, 86400);
+      if (signed.error || !signed.data?.signedUrl) {
+        console.error('Gemini video signed URL creation failed:', { taskId, index: i, error: signed.error?.message });
+        return res.status(503).json({
+          error: 'Access URL for the generated video could not be created. Try again shortly.',
+          retryable: true,
+        });
+      }
+      videoUrls.push(signed.data.signedUrl);
     }
 
     return res.status(200).json({

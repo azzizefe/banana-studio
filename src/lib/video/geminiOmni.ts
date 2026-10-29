@@ -18,8 +18,14 @@ export const getGeminiOmniConfigError = (
   quality?: VideoQuality,
   duration?: VideoDuration,
 ): string | undefined => {
-  if (!prompt.trim() && images.length === 0 && videos.length === 0) {
-    return 'Enter a prompt or attach reference images/video to generate with Gemini Omni.';
+  if (!prompt.trim() && images.length === 0) {
+    return 'Enter a prompt or attach a reference image to generate with Gemini Omni.';
+  }
+  if (videos.length > 0) {
+    return 'Gemini Omni does not support reference videos.';
+  }
+  if (images.length > 1) {
+    return 'Gemini Omni supports at most 1 reference image.';
   }
   if (aspectRatio && !GEMINI_OMNI_SUPPORTED_ASPECT_RATIOS.includes(aspectRatio)) {
     return `Gemini Omni supports aspect ratios: ${GEMINI_OMNI_SUPPORTED_ASPECT_RATIOS.join(', ')}.`;
@@ -29,12 +35,6 @@ export const getGeminiOmniConfigError = (
   }
   if (duration && !GEMINI_OMNI_SUPPORTED_DURATIONS.includes(duration)) {
     return 'Gemini Omni supports durations of 5s or 10s.';
-  }
-  if (images.length > 5) {
-    return 'Gemini Omni supports up to 5 reference images.';
-  }
-  if (videos.length > 1) {
-    return 'Gemini Omni supports at most 1 reference video.';
   }
   return undefined;
 };

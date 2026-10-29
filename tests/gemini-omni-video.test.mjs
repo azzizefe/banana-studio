@@ -31,9 +31,12 @@ test('gemini-omni-1.1-flash configuration validation', () => {
   // Rejects invalid duration
   assert.ok(getGeminiOmniConfigError('Valid prompt', [], [], '16:9', '720p', 15));
 
-  // Rejects too many reference images
-  const tooManyImages = Array(6).fill({ id: 'img', data: 'data' });
-  assert.ok(getGeminiOmniConfigError('Valid prompt', tooManyImages, [], '16:9', '720p', 5));
+  // Rejects more than 1 reference image
+  const twoImages = Array(2).fill({ id: 'img', data: 'data' });
+  assert.ok(getGeminiOmniConfigError('Valid prompt', twoImages, [], '16:9', '720p', 5));
+
+  // Rejects reference videos
+  assert.ok(getGeminiOmniConfigError('Valid prompt', [], [{ id: 'vid', url: 'https://example.com/vid.mp4' }], '16:9', '720p', 5));
 });
 
 test('gemini-omni-1.1-flash cost estimation', () => {

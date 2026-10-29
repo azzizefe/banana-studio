@@ -892,7 +892,7 @@ const createGeminiOmniVideoTask = async (
   }
 
   const result = await response.json().catch(() => null);
-  if (!response.ok && !result?.taskId) {
+  if (!response.ok) {
     if (response.status >= 500 || !result) {
       throw new RecoverableVideoTaskError(result?.error || 'Gemini acceptance could not be confirmed. Check task history and usage before submitting again.');
     }

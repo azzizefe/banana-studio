@@ -584,7 +584,9 @@ export const Controls: React.FC<ControlsProps> = ({
   // prevents a request that the provider cannot interpret unambiguously.
   const maxReferenceVideos = isH3VideoConfig ? (h3State.available ? h3State.capabilities.videos.max : 0) : config.videoModel === 'seedance-2.5'
     ? (config.videoOperation === 'edit' || config.videoOperation === 'extend' ? 1 : 10)
-    : 3;
+    : config.videoModel === 'gemini-omni-1.1-flash'
+      ? 0
+      : 3;
   const maxReferenceAudios = isH3VideoConfig ? (h3State.available ? h3State.capabilities.audios.max : 0) : config.videoModel === 'seedance-2.5' ? 10 : 3;
   const seedanceFrameOnly = config.videoModel === 'seedance-2.5'
     && (config.videoOperation || 'generate') === 'generate'
@@ -594,9 +596,11 @@ export const Controls: React.FC<ControlsProps> = ({
     && (config.referenceImages || []).some(image => image.isFirstFrame || image.isLastFrame);
   const maxReferenceImages = isH3VideoConfig
     ? h3State.imageLimit
-    : config.mode === 'video' && config.videoModel === 'seedance-2.5'
-      ? (seedanceFrameOnly ? 2 : 30)
-      : config.mode === 'image' && config.imageModel === SUNBURST_MODEL ? 16 : 14;
+    : config.mode === 'video' && config.videoModel === 'gemini-omni-1.1-flash'
+      ? 1
+      : config.mode === 'video' && config.videoModel === 'seedance-2.5'
+        ? (seedanceFrameOnly ? 2 : 30)
+        : config.mode === 'image' && config.imageModel === SUNBURST_MODEL ? 16 : 14;
   const hasStaleEnhancedPrompt = h3PromptSupported && isEnhancedPromptStale(config);
 
   const formatVideoModel = (model?: VideoModelId) => model === 'seedance-2.0'
