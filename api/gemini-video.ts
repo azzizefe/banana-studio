@@ -174,6 +174,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...(imageParam ? { image: imageParam } : {}),
     };
 
+    if (process.env.GEMINI_VIDEO_MOCK === 'true') {
+      const mockTaskId = `mock_gemini_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await registerProviderTask(writer, 'gemini', mockTaskId, user.id);
+      await writer.from('generations').update({ task_id: mockTaskId, status: 'processing' }).eq('id', galleryClaim.id);
+      return res.status(200).json({ taskId: mockTaskId });
+    }
+
     const genParams: GenerateVideosParameters = {
       model: 'gemini-omni-1.1-flash',
       source,
@@ -236,6 +243,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } catch {
       // keep original errorMessage
+    }
+
+    const isMockEligible = process.env.GEMINI_VIDEO_MOCK === 'true' || process.env.BANANA_RUNTIME === 'local';
+    const isUnsupported = errorMessage.includes('not supported for predictLongRunning') || errorMessage.includes('is not found for API version') || errorStatus === 404;
+    if (isMockEligible && isUnsupported) {
+      console.warn('Gemini video API is not supported on this key; using local preview simulation mode.');
+      const mockTaskId = `mock_gemini_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      await registerProviderTask(writer, 'gemini', mockTaskId, user.id);
+      await writer.from('generations').update({ task_id: mockTaskId, status: 'processing' }).eq('id', galleryClaim.id);
+      return res.status(200).json({ taskId: mockTaskId });
     }
 
     if (errorMessage.includes('not supported for predictLongRunning') || errorMessage.includes('is not found for API version')) {

@@ -40,6 +40,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  if (taskId.startsWith('mock_gemini_')) {
+    const parts = taskId.split('_');
+    const createdTimestamp = Number(parts[2]) || Date.now();
+    const elapsed = Date.now() - createdTimestamp;
+    if (elapsed < 2500) {
+      return res.status(200).json({
+        status: 'processing',
+        progress: Math.min(0.85, Math.max(0.2, elapsed / 2500)),
+      });
+    }
+
+    const bucket = db.storage.from('media');
+    const safeTaskId = taskId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const storagePath = `${user.id}/gemini-video/${safeTaskId}.mp4`;
+
+    const existing = await bucket.createSignedUrl(storagePath, 86400);
+    if (!existing.error && existing.data?.signedUrl) {
+      return res.status(200).json({
+        status: 'completed',
+        progress: 1.0,
+        output: [existing.data.signedUrl],
+      });
+    }
+
+    let buffer: Buffer | null = null;
+    try {
+      const fsModule = await import('fs');
+      const pathModule = await import('path');
+      const candidates = [
+        pathModule.resolve(process.cwd(), 'docs/assets/video-demo.mp4'),
+        pathModule.resolve(process.cwd(), 'demo.mp4'),
+        pathModule.resolve(process.cwd(), '../docs/assets/video-demo.mp4'),
+      ];
+      for (const cand of candidates) {
+        if (fsModule.existsSync(cand)) {
+          buffer = fsModule.readFileSync(cand);
+          break;
+        }
+      }
+    } catch {
+      buffer = null;
+    }
+
+    if (buffer && buffer.length > 0) {
+      await bucket.upload(storagePath, buffer, {
+        contentType: 'video/mp4',
+        upsert: true,
+      });
+      const signed = await bucket.createSignedUrl(storagePath, 86400);
+      if (signed.data?.signedUrl) {
+        return res.status(200).json({
+          status: 'completed',
+          progress: 1.0,
+          output: [signed.data.signedUrl],
+        });
+      }
+    }
+
+    return res.status(200).json({
+      status: 'completed',
+      progress: 1.0,
+      output: ['https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'],
+    });
+  }
+
   try {
     const ai = new GoogleGenAI({ apiKey });
     const reqOperation = new GenerateVideosOperation();
