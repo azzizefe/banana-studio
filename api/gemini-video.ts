@@ -226,12 +226,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ taskId });
   } catch (error: any) {
+    let errorMessage = error?.message || 'Gemini video generation failed to start.';
+    try {
+      if (typeof errorMessage === 'string' && errorMessage.trim().startsWith('{')) {
+        const parsed = JSON.parse(errorMessage);
+        if (parsed?.error?.message) {
+          errorMessage = parsed.error.message;
+        }
+      }
+    } catch {
+      // keep original errorMessage
+    }
+
+    if (errorMessage.includes('not supported for predictLongRunning') || errorMessage.includes('is not found for API version')) {
+      errorMessage = 'Google Gemini API (v1beta) does not support video generation (predictLongRunning) with this API key. Video generation requires Google Cloud Vertex AI or an allowlisted account.';
+    }
+
     const errorStatus = Number(error?.status || error?.statusCode || 500);
     const isDefinitiveRejection = errorStatus >= 400 && errorStatus < 500;
     if (isDefinitiveRejection) {
       const { error: updateErr } = await writer.from('generations').update({
         status: 'failed',
-        metadata: { ...galleryClaim.metadata, error: error?.message || 'Gemini video generation was rejected.' }
+        metadata: { ...galleryClaim.metadata, error: errorMessage }
       }).eq('id', galleryClaim.id);
       if (updateErr) console.error('Failed to update generation status to failed:', { generationId: galleryClaim.id, error: updateErr.message });
     } else if (!providerCallDispatched) {
@@ -246,10 +262,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else {
       // Provider call was dispatched but resulted in 5xx/network error: preserve processing claim & geminiSubmissionStartedAt for admin reconciliation
       const { error: updateErr } = await writer.from('generations').update({
-        metadata: { ...galleryClaim.metadata, error: error?.message || 'Gemini video generation failed with uncertain outcome.' }
+        metadata: { ...galleryClaim.metadata, error: errorMessage }
       }).eq('id', galleryClaim.id);
       if (updateErr) console.error('Failed to record uncertain outcome error:', { generationId: galleryClaim.id, error: updateErr.message });
     }
-    return res.status(errorStatus).json({ error: error?.message || 'Gemini video generation failed to start.' });
+    return res.status(errorStatus).json({ error: errorMessage });
   }
 }
